@@ -1,6 +1,5 @@
 from tkinter import *
 
-yes = 1
 field_size = 14
 scale = 1.0
 canvasX = 400
@@ -366,17 +365,17 @@ def count_corners():
     column = 0
     for y in field:
         for x in y:
-            if(check_corners("Player 1", row, column)):
+            if(check_corners("Player 1", column, row)):
                 Player1_corners += 1
-            if(check_corners("Player 2", row, column)):
+            if(check_corners("Player 2", column, row)):
                 Player2_corners += 1
             column +=1
         column = 0
         row += 1
-    #print(f"Player1_corners: {Player1_corners}\nPlayer2_corners: {Player2_corners}")
+    print(f"Player1_corners: {Player1_corners}\nPlayer2_corners: {Player2_corners}")
 
 def check_corners(player, x, y):
-    id = player[-1]
+    id = int(player[-1])
     edge_flag = True
     corner_flag = False
     if (field[y][x] == 0):
