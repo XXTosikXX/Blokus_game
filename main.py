@@ -372,7 +372,7 @@ def count_corners():
             column +=1
         column = 0
         row += 1
-    print(f"Player1_corners: {Player1_corners}\nPlayer2_corners: {Player2_corners}")
+    print(f"################################\nPlayer1_corners: {Player1_corners}\nPlayer2_corners: {Player2_corners}")
 
 def check_corners(player, x, y):
     id = int(player[-1])
