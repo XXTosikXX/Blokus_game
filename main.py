@@ -1,5 +1,6 @@
 from tkinter import *
 
+yes = 1
 field_size = 14
 scale = 1.0
 canvasX = 400
