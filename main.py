@@ -13,6 +13,7 @@ active_tile = "None"
 move_count = 0
 rotation = 0
 log = []
+mirror = 0
 
 I5 = [2, 7, 12, 17, 22]
 I4 = [7, 12, 17, 22]
@@ -145,6 +146,7 @@ def place_tile(name, x, y):
     if(check_piece(name)):
         tiles = globals()[f'{name}']
         tiles = apply_rotation(tiles, rotation)
+        tiles = apply_mirror(tiles, mirror)
         if (check_move(tiles, x, y)):
             id = int(player[-1])
             globals()[f'player{id}_tiles'][f'{name}'] = 0
@@ -156,7 +158,7 @@ def place_tile(name, x, y):
                 player = "Player 1"
             active_tile = "None"
             count_corners()
-            log.append(f"{name}_{x}_{y}_{rotation}")
+            log.append(f"{name}_{x}_{y}_{rotation}_{mirror}")
     else:
         print(f"{player} has no more pieces of that kind!")
 
@@ -317,7 +319,8 @@ def draw_sidepanel():
             coords = (260+nx*40+8)*scale, (40+ny*38)*scale, (260+(nx+1)*40+8)*scale, (40+(ny+1)*38)*scale
             tile_name = tile_list[ny*3+nx][0]
             tile = globals()[f'{tile_name}']
-            rotated_tile = apply_rotation(tile, rotation)
+            tile = apply_rotation(tile, rotation)
+            tile = apply_mirror(tile, mirror)
             if (active_tile == tile_name):
                 outline_color = '#999999'
                 border = 2*scale
@@ -330,7 +333,7 @@ def draw_sidepanel():
                 color = "#aaaaaa"
             else:
                 color = globals()[f'player{id}_color']
-            for square in rotated_tile:
+            for square in tile:
                 vx = (square % 5)
                 vy = (square // 5)
                 coords = (260+nx*40+8+vx*8)*scale, (40+ny*38+vy*38/5)*scale, (260+nx*40+8+(vx+1)*8)*scale, (40+ny*38+(vy+1)*38/5)*scale
@@ -411,9 +414,10 @@ def undo(event):
     global player
     global move_count
     last_move = log.pop()
-    name, x, y, rotation = last_move.split('_')
+    name, x, y, rotation, mirror = last_move.split('_')
     tiles = globals()[f'{name}']
     tiles = apply_rotation(tiles, int(rotation))
+    tiles = apply_mirror(tiles, int(mirror))
     #print(f"name: {name}, tiles: {tiles} x: {x}, y: {y}, rotation: {rotation}")
     draw_tile("Player 0", tiles, int(x), int(y))
     if (player == "Player 1"):
@@ -423,6 +427,24 @@ def undo(event):
         globals()[f'player1_tiles'][f'{name}'] += 1
         player = "Player 1"
     move_count -= 1
+    update()
+
+def apply_mirror(tiles, mirror):
+    if (mirror == 0):
+        return tiles
+    mirrored_tiles = []
+    for tile in tiles:
+        vx = (tile % 5) -2
+        vx = -vx
+        vy = (tile // 5) -2
+        new_tile = 12 +vx+vy*5
+        mirrored_tiles.append(new_tile)
+    return mirrored_tiles
+
+def change_mirror(event):
+    global mirror
+    mirror += 1
+    mirror = mirror % 2
     update()
 
 field = generate_field(field_size, field_size)
@@ -436,5 +458,6 @@ win.bind("<Button-1>", click_event)
 win.bind("q", rotate)
 win.bind("e", rotate, add = "+")
 win.bind("<Control-z>", undo)
+win.bind("s", change_mirror)
 win.minsize(400, 320)
 win.mainloop()
