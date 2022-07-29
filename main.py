@@ -14,7 +14,11 @@ move_count = 0
 rotation = 0
 log = []
 mirror = 0
+Player1_corners = []
+Player2_corners = []
 
+tiles_list = ["I5", "I4", "I3", "I2", "I1", "U5", "O4", "X5", "P5", "W5",
+"T5", "T4", "V5", "V3", "Z5", "Z4", "F5", "L5", "L4", "N5", "Y5"]
 I5 = [2, 7, 12, 17, 22]
 I4 = [7, 12, 17, 22]
 I3 = [7, 12, 17]
@@ -36,6 +40,14 @@ L5 = [2, 7, 12, 17, 18]
 L4 = [2, 7, 12, 13]
 N5 = [16, 17, 12, 13, 14]
 Y5 = [11, 12, 7, 13, 14]
+P = [1, 2, 3, 6, 8, 11, 12, 13, 16, 21]
+L = [1, 6, 11, 16, 21, 22, 23]
+A = [1, 2, 3, 6, 8, 11, 12, 13, 16, 18, 21, 23]
+Y = [1, 3, 5, 8, 11, 12, 13, 17, 22]
+E = [1, 2, 3, 6, 11, 12, 13, 17, 21, 22, 23]
+R = [1, 2, 3, 6, 8, 11, 12, 13, 16, 18, 21, 24]
+one = [1, 2, 3, 7, 12, 17, 21, 22, 23]
+two = [0, 1, 2, 3, 4, 6, 8, 11, 13, 16, 18, 20, 21, 22, 23, 24]
 
 player1_tiles = {"I5" : 1, "I4" : 1, "I3" : 1, "I2" : 1, "I1" : 1,
 "U5" : 1, "O4" : 1, "X5" : 1, "P5" : 1, "W5" : 1, "T5" : 1, "T4" : 1,
@@ -108,6 +120,7 @@ def draw_square(x, y, color, canvas):
     canvas.create_rectangle(coords, fill = color)
 
 def click_event(event):
+    global player
     global active_tile
     x = event.x
     y = event.y
@@ -130,6 +143,13 @@ def click_event(event):
     else: #field gets clicked
         if (active_tile != "None"):
             place_tile(active_tile, SqX, SqY)
+            if (check_for_moves(player) == False):
+                if (player == "Player 1"):
+                    player = "Player 2"
+                else:
+                    player = "Player 1"
+                if (check_for_moves(player) == False):
+                    game_over()
         else:
             print("Select the tile first")
     update()
@@ -143,11 +163,11 @@ def place_tile(name, x, y):
         color = "#ff6666"
     else:
         color = "#66ff66"
-    if(check_piece(name)):
+    if(check_piece(name, player)):
         tiles = globals()[f'{name}']
         tiles = apply_rotation(tiles, rotation)
         tiles = apply_mirror(tiles, mirror)
-        if (check_move(tiles, x, y)):
+        if (check_move(tiles, x, y, True)):
             id = int(player[-1])
             globals()[f'player{id}_tiles'][f'{name}'] = 0
             draw_tile(player, tiles, x, y)
@@ -162,21 +182,26 @@ def place_tile(name, x, y):
     else:
         print(f"{player} has no more pieces of that kind!")
 
-def check_piece(name):
+def check_tile(player, tiles, name, x, y):
+    if (check_piece(name, player) and check_move(tiles, x, y, False)):
+        return True
+    return False
+
+def check_piece(name, player):
     id = int(player[-1])
     if globals()[f"player{id}_tiles"][f"{name}"] == 1:
         return True
     return False
 
-def check_move(tiles, x, y):
+def check_move(tiles, x, y, msg):
     if (move_count // 2 == 0):
         valid_first_move = check_first_move(tiles, x, y)
         if (valid_first_move == False):
             print("First tile should occupy square in a corner!")
             return False
-    valid_boundaries = check_boundaries(tiles, x, y)
+    valid_boundaries = check_boundaries(tiles, x, y, msg)
     if (valid_boundaries):
-        valid_CAE = check_CAE(player, tiles, x, y) #CAE = Corners And Edges
+        valid_CAE = check_CAE(player, tiles, x, y, msg) #CAE = Corners And Edges
         if (valid_CAE):
             return True
     return False
@@ -228,7 +253,7 @@ def apply_rotation(tiles, rotation):
         rotated_tiles.append(new_tile)
     return rotated_tiles
 
-def check_CAE(player, tiles, x, y):
+def check_CAE(player, tiles, x, y, msg):
     edge_flag = True
     corner_flag = False
     id = int(player[-1])
@@ -265,7 +290,8 @@ def check_CAE(player, tiles, x, y):
                 if (field[y+vy+1][x+vx+1] == id):
                     corner_flag = True
         else:
-            print("Cannot place over other tiles!")
+            if (msg):
+                print("Cannot place over other tiles!")
             return False
     if (edge_flag):
         if (corner_flag):
@@ -273,15 +299,19 @@ def check_CAE(player, tiles, x, y):
         elif (move_count // 2 == 0):
             return True
         else:
-            print("Tiles have to touch each other with at least 1 corner!")
+            if (msg):
+                print("Tiles have to touch each other with at least 1 corner!")
             return False
     else:
-        print("Edges of your tiles should not touch each other!")
+        if (msg):
+            print("Edges of your tiles should not touch each other!")
         return False
 
-def check_boundaries(tiles, x, y):
+def check_boundaries(tiles, x, y, msg):
     valid = True
     for tile in tiles:
+        if (x < 0 or x >= field_size or y < 0 or y >= field_size):
+            valid = False
         v = 0
         h = 0
         v = (tile // 5) - 2
@@ -296,7 +326,8 @@ def check_boundaries(tiles, x, y):
     if (valid):
         return True
     else:
-        print("Invalid location, out of map")
+        if (msg):
+            print("Invalid location, out of map")
         return False
 
 def draw_tile(player, tiles, x, y):
@@ -362,20 +393,21 @@ def rotate(event):
     update()
 
 def count_corners():
-    Player1_corners = 0
-    Player2_corners = 0
+    global Player1_corners
+    global Player2_corners
+    Player1_corners = []
+    Player2_corners = []
     row = 0
     column = 0
     for y in field:
         for x in y:
             if(check_corners("Player 1", column, row)):
-                Player1_corners += 1
+                Player1_corners.append(f"{column}_{row}")
             if(check_corners("Player 2", column, row)):
-                Player2_corners += 1
+                Player2_corners.append(f"{column}_{row}")
             column +=1
         column = 0
         row += 1
-    print(f"################################\nPlayer1_corners: {Player1_corners}\nPlayer2_corners: {Player2_corners}")
 
 def check_corners(player, x, y):
     id = int(player[-1])
@@ -446,6 +478,43 @@ def change_mirror(event):
     mirror += 1
     mirror = mirror % 2
     update()
+
+def check_for_moves(player):
+    moves = []
+    id = int(player[-1])
+    corners = globals()[f"Player{id}_corners"]
+    for str in corners:
+        x, y = str.split("_")
+        x = int(x)
+        y = int(y)
+        for name in tiles_list:  # goes through every tile name in tile_list
+            tiles = globals()[f"{name}"]
+            for rotation in range(4):   # cycles through 4 rotations
+                tiles = apply_rotation(tiles, rotation)
+                for mirror in range(2): # checks both mirror possibilities
+                    tiles = apply_mirror(tiles, mirror)
+                    for square in tiles:
+                        vx = (square % 5) -2
+                        vy = (square // 5) -2
+                        if (check_tile(player, tiles, name, x-vx, y-vy)):
+                            if ((x-vx) // 10 == 0):
+                                lx = f"0{x-vx}"
+                            else:
+                                lx = f"{x-vx}"
+                            if ((y-vy) // 10 == 0):
+                                ly = f"0{y-vy}"
+                            else:
+                                ly = f"{y-vy}"
+                            moves.append(f"{name}_{lx}_{ly}_{rotation}_{mirror}")
+
+    print(f"moves = {moves}")
+    print(f"Amount of moves: {len(moves)}")
+    if (len(moves) == 0 and move_count // 2 != 0):
+        return False
+    return True
+
+def game_over():
+    print("Its game over!")
 
 field = generate_field(field_size, field_size)
 win = Tk()
