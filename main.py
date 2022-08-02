@@ -6,14 +6,15 @@ canvasX = 400
 canvasY = 320
 startX = 400 - 4
 startY = 320 - 4
-players = ["Player 1", "Player 2"]
+players = ["Anton", "Peter", "Niclas", "Lorenz"]
 player_id = 0
 colors = ["#6666ff", "#ffff66", "#ff6666", "#66ff66"]
 active_tile = "None"
 move_count = 0
 rotation = 0
-log = []
 mirror = 0
+log = []
+team_mode = False
 tiles_list = ["I5", "I4", "I3", "I2", "I1", "U5", "O4", "X5", "P5", "W5",
 "T5", "T4", "V5", "V3", "Z5", "Z4", "F5", "L5", "L4", "N5", "Y5"]
 I5 = [2, 7, 12, 17, 22]
@@ -68,8 +69,6 @@ def rezoom(event):
     global scale
     global canvasX
     global canvasY
-    global startX
-    global startY
     x = win.winfo_width()
     y = win.winfo_height()
     """print(f\"""#############################################\n
@@ -85,12 +84,11 @@ def rezoom(event):
         #canvas.scale("all", 2, 2, x/canvasX, x/canvasX)
         canvasY = canvasY*x/canvasX
         canvasX = canvasX*x/canvasX
-        canvas.config(width = canvasX, height = canvasY)
     elif (x/canvasX > y/canvasY):
         #canvas.scale("all", 2, 2, y/canvasY, y/canvasY)
         canvasX = canvasX*y/canvasY
         canvasY = canvasY*y/canvasY
-        canvas.config(width = canvasX, height = canvasY)
+    canvas.config(width = canvasX-4, height = canvasY-4)
     scale = canvasX/startX
     update()
 
@@ -146,10 +144,17 @@ def click_event(event):
     else: #field gets clicked
         if (active_tile != "None"):
             if (place_tile(active_tile, SqX, SqY)):
-                if (check_for_moves(player_id) == False):
-                    change_player()
-                    if (check_for_moves(player_id) == False):
-                        game_over()
+                id = player_id+1
+                for vid in range(len(players)):
+                    next_id = (id+vid) % len(players)
+                    print(f"next_id: {next_id}")
+                    if (check_for_moves(next_id)):
+                        change_player(next_id)
+                        break
+                    else:
+                        print(f"{players[next_id]} has no more moves!")
+                else:
+                    game_over()
         else:
             print("Select the tile first")
     update()
@@ -164,35 +169,37 @@ def place_tile(name, x, y):
         tiles = globals()[f'{name}']
         tiles = apply_rotation(tiles, rotation)
         tiles = apply_mirror(tiles, mirror)
-        if (check_move(tiles, x, y, True)):
+        if (check_move(player_id, tiles, x, y, True)):
             globals()[f'player{player_id}_tiles'][f'{name}'] = 0
             draw_tile(player_id, tiles, x, y)
             move_count += 1
-            change_player()
+            log.append(f"{player_id}_{name}_{x}_{y}_{rotation}_{mirror}")
             active_tile = "None"
-            count_corners()
-            log.append(f"{name}_{x}_{y}_{rotation}_{mirror}")
+            #count_corners()
             return True
     else:
         print(f"{players[player_id]} has no more pieces of that kind!")
         return False
 
 def check_tile(player_id, tiles, name, x, y):
-    if (check_piece(name, player_id) and check_move(tiles, x, y, False)):
+    if (check_piece(name, player_id) and check_move(player_id, tiles, x, y, False)):
         return True
     return False
 
-def change_player():
+def change_player(id = None):
     global player_id
-    player_id += 1
-    player_id = player_id % len(players)
+    if (id == None):
+        player_id += 1
+        player_id = player_id % len(players)
+    else:
+        player_id = id
 
 def check_piece(name, id):
     if globals()[f"player{id}_tiles"][f"{name}"] == 1:
         return True
     return False
 
-def check_move(tiles, x, y, msg):
+def check_move(player_id, tiles, x, y, msg):
     if (move_count // len(players) == 0):
         valid_first_move = check_first_move(tiles, x, y)
         if (valid_first_move == False):
@@ -360,7 +367,7 @@ def draw_tile(player_id, tiles, x, y):
         field[y+vy][x+vx] = player_id
 
 def draw_sidepanel():
-    coords = 260*scale, 2, 396*scale, 316*scale
+    coords = 260*scale+2, 2, 394.5*scale, 315.5*scale
     canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
     coords = (8+260)*scale, 2.5*scale, (8+260+120)*scale, (2.5+36)*scale
     canvas.create_rectangle(coords, fill = "#eeeeee")
@@ -395,7 +402,7 @@ def draw_sidepanel():
             canvas.create_oval(coords, fill = "#000000")
 
 def draw_scoreboard():
-    coords = 2, (260)*scale+2, (260)*scale, (316)*scale
+    coords = 2, (260)*scale+2, (260)*scale+2, (315.5)*scale
     canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
 
 def update():
@@ -417,7 +424,6 @@ def rotate(event):
 def count_corners():
     for player in range(len(players)):
         globals()[f"Player{player}_corners"] = []
-        print(f"""{f"Player{player}_corners"} is created""")
         if (move_count // len(players) == 0 and move_count <= player):
             if (player == 1):
                 if (field[0][0] != "#"):
@@ -473,22 +479,21 @@ def check_corners(id, x, y):
 
 def undo(event):
     if (len(log) >= 1):
-        global player
         global player_id
         global move_count
         last_move = log.pop()
-        name, x, y, rotation, mirror = last_move.split('_')
+        player, name, x, y, rotation, mirror = last_move.split('_')
         tiles = globals()[f'{name}']
         tiles = apply_rotation(tiles, int(rotation))
         tiles = apply_mirror(tiles, int(mirror))
-        #print(f"name: {name}, tiles: {tiles} x: {x}, y: {y}, rotation: {rotation}")
         draw_tile("#", tiles, int(x), int(y))
-        player_id -= 1
-        player_id = player_id % len(players)
+        player_id = int(player)
         globals()[f'player{player_id}_tiles'][f'{name}'] += 1
         move_count -= 1
         print("Reverted the last move!")
         update()
+    else:
+        print("There is nothing to undo!")
 
 def apply_mirror(tiles, mirror):
     if (mirror == 0):
@@ -510,7 +515,8 @@ def change_mirror(event):
 
 def check_for_moves(player_id):
     moves = []
-    print(f"""Active Player {player_id} corners: {globals()[f"Player{player_id}_corners"]}""")
+    count_corners()
+    print(f"""Player {player_id} corners: {globals()[f"Player{player_id}_corners"]}""")
     corners = globals()[f"Player{player_id}_corners"]
     for name in tiles_list:  # goes through every tile name in tile_list
         tiles = globals()[f"{name}"]
@@ -542,8 +548,59 @@ def check_for_moves(player_id):
         return False
     return True
 
-def game_over():
+def game_over(event=None):
     print("Its game over!")
+    print(f"""Score:""")
+    score_list = []
+    for id, player in enumerate(players):
+        locals()[f"Player{id}_score"] = 0
+        all_pieces_placed = True
+        for item_id, item in enumerate(globals()[f"player{id}_tiles"].items()):
+            if (item[1] == 1):
+                locals()[f"Player{id}_score"] -= int(item[0][1])
+                all_pieces_placed = False
+        if (all_pieces_placed):
+            for str in reverse(log):
+                pl, name, x, y, rotation, mirrored = str.split("_")
+                if (pl == id):
+                    if (name == "I1"):
+                        locals()[f"Player{id}_score"] = 20
+                    else:
+                        locals()[f"Player{id}_score"] = 15
+                    break
+
+        score = locals()[f"Player{id}_score"]
+        print(f"{player}: {score}")
+        score_list.append(score)
+    if (not team_mode):
+        highest = max(score_list)
+        winner_id = score_list.index(highest)
+        winners = [players[winner_id]]
+        for id, score in enumerate(score_list):
+            if (id == winner_id):
+                continue
+            if (score == highest):
+                winners.append(players[id])
+        if (len(winners) == 1):
+            print(f"{winners[0]} won with {highest} points!")
+        elif (len(winners) == 2):
+            print(f"It is a tie beetween {winners[0]} and {winners[1]} \
+with {highest} points!")
+        elif (len(winners) == 3):
+            print(f"It is a tie beetween {winners[0]}, {winners[1]} \
+and {winners[2]} with {highest} points!")
+        else:
+            print(f"It is a tie beetween {winners[0]}, {winners[1]}\
+, {winners[2]} and {winners[3]} with {highest} points!")
+    else:
+        team1_score = score_list[0] + score_list[2]
+        print(f"Team 1 score: {team1_score}")
+        team2_score = score_list[1] + score_list[3]
+        print(f"Team 2 score: {team2_score}")
+        if (team1_score > team2_score):
+            print(f"Team 1 ({players[0]} and {players[2]}) won with {team1_score} points!")
+        else:
+            print(f"Team 2 ({players[1]} and {players[3]}) won with {team2_score} points!")
 
 field = generate_field(field_size, field_size)
 win = Tk()
@@ -559,4 +616,6 @@ win.bind("e", rotate, add = "+")
 win.bind("<Control-z>", undo)
 win.bind("s", change_mirror)
 win.minsize(400, 320)
+win.title("Blokus game")
+win.bind("g", game_over)
 win.mainloop()
