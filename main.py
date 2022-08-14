@@ -1,5 +1,8 @@
 from tkinter import *
+import tkinter.font as font
+from tkinter import ttk
 
+game_state = "Options"
 field_size = 14
 scale = 1.0
 canvasX = 400
@@ -15,6 +18,9 @@ rotation = 0
 mirror = 0
 log = []
 team_mode = False
+options_field_size = ""
+field_values = ['10x10 (very small)', '12x12 (small)', '14x14 (standard)', '16x16 (big)',
+'18x18 (large)', '20x20 (extra large)']
 tiles_list = ["I5", "I4", "I3", "I2", "I1", "U5", "O4", "X5", "P5", "W5",
 "T5", "T4", "V5", "V3", "Z5", "Z4", "F5", "L5", "L4", "N5", "Y5"]
 I5 = [2, 7, 12, 17, 22]
@@ -65,7 +71,7 @@ player3_tiles = {"I5" : 1, "I4" : 1, "I3" : 1, "I2" : 1, "I1" : 1,
 "V5" : 1, "V3" : 1, "Z5" : 1, "Z4" : 1, "F5" : 1, "L5" : 1, "L4" : 1,
 "N5" : 1, "Y5" : 1}
 
-def rezoom(event):
+def rezoom(event=None):
     global scale
     global canvasX
     global canvasY
@@ -88,7 +94,8 @@ def rezoom(event):
         #canvas.scale("all", 2, 2, y/canvasY, y/canvasY)
         canvasX = canvasX*y/canvasY
         canvasY = canvasY*y/canvasY
-    canvas.config(width = canvasX-4, height = canvasY-4)
+    if (game_state == "Game"):
+        canvas.config(width = canvasX-4, height = canvasY-4)
     scale = canvasX/startX
     update()
 
@@ -121,6 +128,8 @@ def draw_square(x, y, color, canvas):
     canvas.create_rectangle(coords, fill = color)
 
 def click_event(event):
+    if (game_state == "Options"):
+        return
     global player_id
     global active_tile
     x = event.x
@@ -406,10 +415,53 @@ def draw_scoreboard():
     canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
 
 def update():
-    canvas.delete('all')
-    draw_field(field, canvas)
-    draw_sidepanel()
-    draw_scoreboard()
+    #print("updating")
+    if (game_state == "Game"):
+        canvas.delete('all')
+        draw_field(field, canvas)
+        draw_sidepanel()
+        draw_scoreboard()
+    elif (game_state == "Options"):
+        update_font()
+        frame.config(width=startX*scale, height=startY*scale)
+        check_team_mode()
+
+def update_font():
+    text_font = font.Font(size=int(10*scale))
+    restart_font = font.Font(size=int(6*scale))
+    cancel['font'] = text_font
+    apply['font'] = text_font
+    apply_and_restart['font'] = restart_font
+    label_amount['font'] = text_font
+    radio_2['font'] = text_font
+    radio_3['font'] = text_font
+    radio_4['font'] = text_font
+    label_field['font'] = text_font
+    combobox_field['font'] = text_font
+    checkbox_team_mode['font'] = text_font
+    label_player_names['font'] = text_font
+    entry_player_0['font'] = text_font
+    entry_player_1['font'] = text_font
+    entry_player_2['font'] = text_font
+    entry_player_3['font'] = text_font
+    label_team_1['font'] = text_font
+    label_team_2['font'] = text_font
+    label_field.config(padx=5*scale, pady=5*scale)
+    label_amount.config(padx=5*scale, pady=5*scale)
+
+def draw_options():
+    frame.pack(anchor="nw")
+    cancel.place(anchor = "nw", relx=0.1, rely=13/16, relwidth=0.2, relheight=1/8)
+    apply.place(anchor = "nw", relx=0.4, rely=13/16, relwidth=0.2, relheight=1/8)
+    apply_and_restart.place(anchor = "nw", relx=0.7, rely=13/16, relwidth=0.2, relheight=1/8)
+    label_amount.place(anchor = "nw", relx=0.05, rely=0.05, relwidth=0.35, relheight=0.06)
+    radio_2.place(anchor = "nw", relx=0.05, rely=0.11, relwidth=0.16, relheight=0.06)
+    radio_3.place(anchor = "nw", relx=0.05, rely=0.17, relwidth=0.16, relheight=0.06)
+    radio_4.place(anchor = "nw", relx=0.05, rely=0.23, relwidth=0.16, relheight=0.06)
+    label_field.place(anchor = "nw", relx=0.05, rely=0.35, relheight=0.08)
+    combobox_field.place(anchor = "nw", relx=0.05, rely=0.43, relwidth=0.4, relheight=0.08)
+    label_player_names.place(anchor = "nw", relx=0.55, rely=0.05, relwidth=0.4, relheight=0.06)
+    draw_entries(rewrite=True)
 
 def rotate(event):
     global rotation
@@ -602,11 +654,193 @@ and {winners[2]} with {highest} points!")
         else:
             print(f"Team 2 ({players[1]} and {players[3]}) won with {team2_score} points!")
 
+def new_game():
+    print("New Game")
+
+def hint():
+    print("Giving a hint!")
+
+def combobox_field_selected(event=None):
+    options_field_size = combobox_field.get()
+    check_apply_button_state()
+
+def check_apply_button_state():
+    options_field_size = combobox_field.get()
+    if field_size != int(options_field_size[0:2]):
+        apply["state"] = 'disabled'
+        return
+    if len(players) != int(radio_players.get()):
+        apply["state"] = 'disabled'
+        return
+    if (options_team_mode.get() and not team_mode) or (not options_team_mode.get() and team_mode):
+        apply["state"] = 'disabled'
+        return
+    apply["state"] = 'normal'
+
+def create_menu():
+    menu_game = Menu(menubar)
+    menubar.add_cascade(menu=menu_game, label='Game')
+    menu_game.add_command(label='New Game', command=new_game)
+    menu_game.entryconfigure('New Game', accelerator='Control+N')
+
+    map_size = IntVar()
+    map_size.set(14)
+    menu_map_size = Menu(menubar)
+    menu_map_size.add_radiobutton(label='10x10 (very small)', variable=map_size, value=10)
+    menu_map_size.add_radiobutton(label='12x12 (small)', variable=map_size, value=12)
+    menu_map_size.add_radiobutton(label='14x14 (standard)', variable=map_size, value=14)
+    menu_map_size.add_radiobutton(label='16x16 (big)', variable=map_size, value=16)
+    menu_map_size.add_radiobutton(label='18x18 (large)', variable=map_size, value=18)
+    menu_map_size.add_radiobutton(label='20x20 (extra large)', variable=map_size, value=20)
+
+    menu_options = Menu(menubar)
+    menubar.add_cascade(menu=menu_options, label='Options')
+    menu_options.add_cascade(menu=menu_map_size, label='Map Size')
+
+    menu_help = Menu(menubar)
+    menu_help.add_command(label='Hint', command=hint)
+    menubar.add_cascade(menu=menu_help, label='Help')
+
+def change_game_state(event=None):
+    global game_state
+    if (game_state == "Game"):
+        game_state = "Options"
+        canvas.pack_forget()
+        draw_options()
+    else:
+        game_state = "Game"
+        rezoom()
+        frame.pack_forget()
+        canvas.pack(anchor = 'nw')
+    update()
+
+def check_team_mode():
+    if (radio_players.get() == "4"):
+        if (checkbox_team_mode not in frame.place_slaves()):
+            checkbox_team_mode.place(anchor="nw", relx=0.21, rely=0.11, relwidth=0.19, relheight=0.18)
+    else:
+        checkbox_team_mode.place_forget()
+        options_team_mode.set(0)
+    check_apply_button_state()
+
+def radiobutton_player():
+    check_team_mode()
+    draw_entries()
+
+def draw_entries(rewrite=False):
+    i = int(radio_players.get())
+    entry_player_0.place_forget()
+    entry_player_1.place_forget()
+    entry_player_2.place_forget()
+    entry_player_3.place_forget()
+    team = options_team_mode.get()
+    if not team:
+        label_team_1.place_forget()
+        label_team_2.place_forget()
+    else:
+        label_team_1.place(anchor = "nw", relx=0.75, rely=0.11, relwidth=0.2, relheight=0.12)
+        label_team_2.place(anchor = "nw", relx=0.75, rely=0.31, relwidth=0.2, relheight=0.12)
+    while i != 0:
+        if not team:
+            globals()[f"entry_player_{i-1}"].place(anchor = "nw", relx=0.55, rely=0.11+0.06*(i-1), relwidth=0.2, relheight=0.06)
+        else:
+            globals()[f"entry_player_{i-1}"].place(anchor = "nw", relx=0.55, rely=0.11+0.2*((i-1)%2)+0.06*((i-1)//2), relwidth=0.2, relheight=0.06)
+        if rewrite:
+            globals()[f"entry_player_{i-1}"].delete(0, END)
+            if len(players) >= i:
+                globals()[f"entry_player_{i-1}"].insert(0, players[i-1])
+            else:
+                globals()[f"entry_player_{i-1}"].insert(0, f"Player {i}")
+        i -= 1
+
+def checkbox_team():
+    check_apply_button_state()
+    draw_entries()
+
+def button_cancel():
+    radio_players.set(str(len(players)))
+    for id, value in enumerate(field_values):
+        if value[0:2] == str(field_size):
+            combobox_field.current(id)
+    options_team_mode.set(team_mode)
+    change_game_state()
+
+def button_apply():
+    change_player_names()
+    change_game_state()
+
+def button_apply_and_restart():
+    global field
+    global field_size
+    global move_count
+    global mirror
+    global rotation
+    global log
+    global team_mode
+    reset_player_tiles()
+    change_player(0)
+    field_size = int(combobox_field.get()[0:2])
+    field = generate_field(field_size, field_size)
+    move_count = 0
+    rotation = 0
+    mirror = 0
+    log = []
+    team_mode = options_team_mode.get()
+    change_player_names()
+    change_game_state()
+
+def change_player_names():
+    global players
+    players = []
+    for id in range(int(radio_players.get())):
+        players.append(globals()[f"entry_player_{id}"].get())
+
+def reset_player_tiles():
+    for id, player in enumerate(players):
+        for tile in tiles_list:
+            globals()[f"player{id}_tiles"][tile] = 1
+        print(globals()[f"player{id}_tiles"])
+
 field = generate_field(field_size, field_size)
 win = Tk()
+
+win.option_add('*tearOff', False)
+menubar = Menu(win)
+win['menu'] = menubar
+create_menu()
+
+text_font = font.Font(size=int(10*scale))
+combobox_font = font.Font(size=int(10*scale))
+frame_bg = "#cccccc"
+radio_players = StringVar()
+options_team_mode = IntVar()
+
 canvas = Canvas(win, width = startX, height = startY, bg = "#cccccc", confine = False)
-canvas.pack(anchor = 'nw')
+frame = Frame(win, width=startX, height=startY, bg=frame_bg)
+cancel = Button(frame, text="Cancel", font=text_font, padx = 10, pady = 10, command=button_cancel)
+apply = Button(frame, text="Apply", font=text_font, padx = 10, pady = 10, command=button_apply)
+apply_and_restart = Button(frame, text="Apply and Restart", font=text_font, padx = 10, pady = 10, command=button_apply_and_restart)
+label_amount = Label(frame, text="Amount of Players", font=text_font, bg=frame_bg, padx = 5*scale, pady = 5*scale, relief="raised")
+radio_2 = Radiobutton(frame, text="2 Players", value="2", variable=radio_players, font=text_font, indicatoron=0, command=radiobutton_player)
+radio_3 = Radiobutton(frame, text="3 Players", value="3", variable=radio_players, font=text_font, indicatoron=0, command=radiobutton_player)
+radio_4 = Radiobutton(frame, text="4 Players", value="4", variable=radio_players, font=text_font, indicatoron=0, command=radiobutton_player)
+entry_player_0 = Entry(frame, font = text_font)
+entry_player_1 = Entry(frame, font = text_font)
+entry_player_2 = Entry(frame, font = text_font)
+entry_player_3 = Entry(frame, font = text_font)
+label_team_1 = Label(frame, text="Team 1", font=text_font, bg=frame_bg, padx = 5*scale, pady = 5*scale, relief="raised")
+label_team_2 = Label(frame, text="Team 2", font=text_font, bg=frame_bg, padx = 5*scale, pady = 5*scale, relief="raised")
+label_field = Label(frame, text="Field size", font=text_font, bg=frame_bg, padx = 5*scale, pady = 5*scale, relief="raised")
+label_player_names = Label(frame, text="Player/KI names", font=text_font, bg=frame_bg, padx = 5*scale, pady = 5*scale, relief="raised")
+checkbox_team_mode = Checkbutton(frame, text="Team mode", onvalue=1, offvalue=0, variable=options_team_mode, font=text_font, indicatoron=0, command=checkbox_team)
+combobox_field = ttk.Combobox(frame, values=field_values, state='readonly', font=combobox_font)
+
+combobox_field.bind("<<ComboboxSelected>>", combobox_field_selected)
+win.option_add('*TCombobox*Listbox.font', combobox_font)
+combobox_field.current(2)
+radio_players.set(str(len(players)))
 update()
+draw_options()
 count_corners()
 check_for_moves(0)
 win.bind("<Configure>", rezoom)
@@ -615,7 +849,9 @@ win.bind("q", rotate)
 win.bind("e", rotate, add = "+")
 win.bind("<Control-z>", undo)
 win.bind("s", change_mirror)
+win.bind("<Escape>", change_game_state)
 win.minsize(400, 320)
+win.geometry("404x324")
 win.title("Blokus game")
 win.bind("g", game_over)
 win.mainloop()
