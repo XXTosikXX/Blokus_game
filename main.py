@@ -9,7 +9,7 @@ canvasX = 400
 canvasY = 320
 startX = 400 - 4
 startY = 320 - 4
-players = ["Anton", "Peter", "Niclas", "Lorenz"]
+players = ["Anton", "Peter"]
 player_id = 0
 colors = ["#6666ff", "#ffff66", "#ff6666", "#66ff66"]
 active_tile = "None"
@@ -156,7 +156,6 @@ def click_event(event):
                 id = player_id+1
                 for vid in range(len(players)):
                     next_id = (id+vid) % len(players)
-                    print(f"next_id: {next_id}")
                     if (check_for_moves(next_id)):
                         change_player(next_id)
                         break
@@ -577,13 +576,25 @@ def check_for_moves(player_id):
             x = int(x)
             y = int(y)
             for rotation in range(4):   # cycles through 4 rotations
-                tiles = apply_rotation(tiles, rotation)
+                rotated_tiles = apply_rotation(tiles, rotation)
+                if rotation != 0 and compare_arrays(tiles, rotated_tiles): # exludes X5 and I1
+                    #print(f"tile: {name}_{rotation}_{mirror}, {tiles} and {rotated_tiles} are the same, no need to rotate")
+                    continue
+                if rotation > 1 and compare_arrays(apply_rotation(tiles, 1), rotated_tiles):
+                    #print(f"tile: {name}_{rotation}_{mirror}, rotation 1 and {rotated_tiles} are the same, no need to rotate ####")
+                    continue
                 for mirror in range(2): # checks both mirror possibilities
-                    tiles = apply_mirror(tiles, mirror)
-                    for square in tiles:
+                    mirrored_tiles = apply_mirror(rotated_tiles, mirror)
+                    if mirror != 0 and compare_arrays(mirrored_tiles, rotated_tiles): # excludes tiles with y-symmetry on any rotation
+                        #print(f"tile: {name}_{rotation}_{mirror}, {mirrored_tiles} and {rotated_tiles} are the same, no need to mirror#")
+                        continue
+                    if rotation % 2 == 1 and mirror == 1 and (compare_arrays(mirrored_tiles, apply_rotation(tiles, 1)) or compare_arrays(mirrored_tiles, apply_rotation(tiles, 3))):
+                        #print(f"tile: {name}_{rotation}_{mirror}, {mirrored_tiles} and {rotated_tiles} are the same, no need to mirror#")
+                        continue
+                    for square in mirrored_tiles:
                         vx = (square % 5) -2
                         vy = (square // 5) -2
-                        if (check_tile(player_id, tiles, name, x-vx, y-vy)):
+                        if (check_tile(player_id, mirrored_tiles, name, x-vx, y-vy)):
                             if ((x-vx) // 10 == 0):
                                 lx = f"0{x-vx}"
                             else:
@@ -593,11 +604,21 @@ def check_for_moves(player_id):
                             else:
                                 ly = f"{y-vy}"
                             moves.append(f"{name}_{lx}_{ly}_{rotation}_{mirror}")
+                            #print(f"Tile {name} successfully fit in {x-vx}, {y-vy} with rotation: {rotation} and mirror: {mirror}")
+                        else:
+                            #print(f"Tile {name} does not fit in {x-vx}, {y-vy} with rotation: {rotation} and mirror: {mirror}")
+                            pass
 
     print(f"moves = {moves}")
     print(f"Amount of moves: {len(moves)}")
     if ((not moves) and move_count // len(players) != 0):
         return False
+    return True
+
+def compare_arrays(x, y):
+    for tile in x:
+        if tile not in y:
+            return False
     return True
 
 def game_over(event=None):
@@ -746,11 +767,17 @@ def draw_entries(rewrite=False):
         else:
             globals()[f"entry_player_{i-1}"].place(anchor = "nw", relx=0.55, rely=0.11+0.2*((i-1)%2)+0.06*((i-1)//2), relwidth=0.2, relheight=0.06)
         if rewrite:
-            globals()[f"entry_player_{i-1}"].delete(0, END)
-            if len(players) >= i:
+            if len(players) >= i and globals()[f"entry_player_{i-1}"].get() == players[i-1]:
+                i -= 1
+                continue
+            elif len(players) >= i:
+                globals()[f"entry_player_{i-1}"].delete(0, END)
                 globals()[f"entry_player_{i-1}"].insert(0, players[i-1])
-            else:
-                globals()[f"entry_player_{i-1}"].insert(0, f"Player {i}")
+                i -= 1
+                continue
+        if len(players) < i:
+            globals()[f"entry_player_{i-1}"].delete(0, END)
+            globals()[f"entry_player_{i-1}"].insert(0, f"Player {i}")
         i -= 1
 
 def checkbox_team():
@@ -799,7 +826,6 @@ def reset_player_tiles():
     for id, player in enumerate(players):
         for tile in tiles_list:
             globals()[f"player{id}_tiles"][tile] = 1
-        print(globals()[f"player{id}_tiles"])
 
 field = generate_field(field_size, field_size)
 win = Tk()
