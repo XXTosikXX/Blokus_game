@@ -15,6 +15,7 @@ colors = ["#6666ff", "#ffff66", "#ff6666", "#66ff66"]
 active_tile = "None"
 move_count = 0
 rotation = 0
+field_rotation = 0
 mirror = 0
 log = []
 team_mode = False
@@ -71,7 +72,32 @@ player3_tiles = {"I5" : 1, "I4" : 1, "I3" : 1, "I2" : 1, "I1" : 1,
 "V5" : 1, "V3" : 1, "Z5" : 1, "Z4" : 1, "F5" : 1, "L5" : 1, "L4" : 1,
 "N5" : 1, "Y5" : 1}
 
-def rezoom(event=None):
+def turn_field(event = None, rotate_to = None):
+    global field
+    global field_rotation
+    fun_field = field[::1]
+    if rotate_to != None:
+        if rotate_to == 0:
+            return fun_field
+        elif rotate_to == 1:
+            rotated_field = list(zip(*fun_field[::-1]))
+        elif rotate_to == 2:
+            rotated_field = []
+            for line in fun_field[::-1]:
+                rotated_field.append(reversed(line))
+        elif rotate_to == 3:
+            rotated_field = list(zip(*fun_field))[::-1]
+        return rotated_field
+    else:
+        if event.char == "c":
+            field_rotation += 1
+            field_rotation = field_rotation % 4
+        else:
+            field_rotation -= 1
+            field_rotation = field_rotation % 4
+    update()
+
+def rezoom(event = None):
     global scale
     global canvasX
     global canvasY
@@ -106,10 +132,9 @@ def generate_field(x, y):
     return field
 
 def draw_field(field, canvas):
-    row = 0
-    column = 0
-    for y in field:
-        for x in y:
+    rotated_field = turn_field(rotate_to=field_rotation)
+    for row, y in enumerate(rotated_field):
+        for column, x in enumerate(y):
             if (x == "#"):
                 if ((column + row) % 2 == 0):
                     color = "#fafafa"
@@ -118,9 +143,6 @@ def draw_field(field, canvas):
             else:
                 color = colors[x]
             draw_square(column, row, color, canvas)
-            column += 1
-        row += 1
-        column = 0
 
 def draw_square(x, y, color, canvas):
     a = 260/field_size * scale
@@ -137,6 +159,13 @@ def click_event(event):
     a = 260/field_size * scale
     SqX = int((x-1)//a)
     SqY = int((y-1)//a)
+    if field_rotation == 2:
+        SqX = field_size-1 - SqX
+        SqY = field_size-1 - SqY
+    elif field_rotation == 1:
+        SqX, SqY = SqY, field_size-1-SqX
+    elif field_rotation == 3:
+        SqX, SqY = field_size-1-SqY, SqX
     #print(f"Coords: {SqX}, {SqY}")
     if (SqX >= field_size or SqY >= field_size or SqX < 0 or SqY < 0):
         if (x >= 268*scale and x <= 388*scale and y >= 40*scale and y <= (40+38*7)*scale):  #sidepanel gets clicked
@@ -173,15 +202,17 @@ def place_tile(name, x, y):
     global move_count
     global active_tile
     color = colors[player_id]
+    fun_rotation = rotation - field_rotation
+    fun_rotation = fun_rotation % 4
     if(check_piece(name, player_id)):
         tiles = globals()[f'{name}']
-        tiles = apply_rotation(tiles, rotation)
+        tiles = apply_rotation(tiles, fun_rotation)
         tiles = apply_mirror(tiles, mirror)
         if (check_move(player_id, tiles, x, y, True)):
             globals()[f'player{player_id}_tiles'][f'{name}'] = 0
             draw_tile(player_id, tiles, x, y)
             move_count += 1
-            log.append(f"{player_id}_{name}_{x}_{y}_{rotation}_{mirror}")
+            log.append(f"{player_id}_{name}_{x}_{y}_{fun_rotation}_{mirror}")
             active_tile = "None"
             #count_corners()
             return True
@@ -462,12 +493,15 @@ def draw_options():
     label_player_names.place(anchor = "nw", relx=0.55, rely=0.05, relwidth=0.4, relheight=0.06)
     draw_entries(rewrite=True)
 
-def rotate(event):
+def rotate(event=None, rotation_modifier=0):
     global rotation
-    char = event.char
-    if (char == 'q'):
+    if event:
+        char = event.char
+    else:
+        char = ""
+    if (rotation_modifier == -1 or char == 'q'):
         rotation -= 1
-    elif (char == 'e'):
+    elif (rotation_modifier == 1 or char == 'e'):
         rotation += 1
     rotation = rotation % 4
     update()
@@ -873,6 +907,8 @@ win.bind("<Configure>", rezoom)
 win.bind("<Button-1>", click_event)
 win.bind("q", rotate)
 win.bind("e", rotate, add = "+")
+win.bind("c", turn_field)
+win.bind("v", turn_field, add = "+")
 win.bind("<Control-z>", undo)
 win.bind("s", change_mirror)
 win.bind("<Escape>", change_game_state)
