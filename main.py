@@ -185,7 +185,7 @@ def click_event(event):
 
     else: #field gets clicked
         if (active_tile != "None"):
-            if (place_tile(active_tile, SqX, SqY, rotation, mirror)):
+            if (place_tile(field, active_tile, SqX, SqY, rotation, mirror)):
                 find_and_select_next_player()
         else:
             print("Select the tile first")
@@ -195,11 +195,10 @@ def find_and_select_next_player():
     id = player_id+1
     for vid in range(len(players)):
         next_id = (id+vid) % len(players)
-        count_corners()
+        count_corners(field)
         #print(f"Checking moves for {next_id}")
-        moves = check_for_moves(next_id)
+        moves = check_for_moves(next_id, field)
         if (moves):
-            print("moves = True")
             change_player(next_id)
             if (player_types[next_id] != "Player"):
                 update()
@@ -217,12 +216,12 @@ def AI_move():
     if (player_types[player_id][0:2] != "AI"):
         return
     if (player_types[player_id][-1] == "1"):
-        count_corners()
-        moves = check_for_moves(player_id)
+        count_corners(field)
+        moves = check_for_moves(player_id, field)
         if (moves):
             move = random.choice(moves)
             name, x, y, rotation, mirror = move.split("_")
-            place_tile(name, int(x), int(y), int(rotation), int(mirror), AI = True)
+            place_tile(field, name, int(x), int(y), int(rotation), int(mirror), AI = True)
             """print(f\"""##############
                     name:       {name}
                     x:          {x}
@@ -234,21 +233,69 @@ def AI_move():
             \""")"""
             find_and_select_next_player()
             update()
+    elif (player_types[player_id][-1] == "2"):
+        count_corners(field)
+        moves = check_for_moves(player_id, field)
+        if (moves):
+            move_scores = []
+            for move in moves:
+                AI_field = copy_field(field)
+                name, x, y, rotation, mirror = move.split("_")
+                AI_field = AI_place_tile(AI_field, name, int(x), int(y), int(rotation), int(mirror))
+                count_corners(AI_field)
+                score = len(globals()[f'Player{player_id}_corners'])
+                for id in range(len(players)):
+                    if id != player_id:
+                        score -= len(globals()[f'Player{id}_corners'])
+                score += 2*int(name[-1])
+                move_scores.append(score)
+            best_move = max(move_scores)
+            deleted = 0
+            for index, move in enumerate(move_scores.copy()):
+                #print(f"move : {move}, score: {best_move}")
+                if move != best_move:
+                    move_scores.remove(move)
+                    moves.pop(index-deleted)
+                    deleted += 1
+            if len(move_scores) > 1:
+                selected_move = random.choice(moves)
+            else:
+                selected_move = moves[0]
+            name, x, y, rotation, mirror = selected_move.split("_")
+            place_tile(field, name, int(x), int(y), int(rotation), int(mirror), AI = True)
+            #print(f"Best selected move is: {selected_move} with score: {best_move}")
+            #print(f"All best moves: {move_scores}")
+            find_and_select_next_player()
+            update()
 
-def place_tile(name, x, y, rotation, mirror, AI = False):
+def copy_field(field):
+    new_field = []
+    for row, y in enumerate(field):
+        new_field.append([])
+        for column, x in enumerate(y):
+            new_field[row].append(x)
+    return new_field
+
+def AI_place_tile(AI_field, name, x, y, rotation, mirror):
+    tiles = globals()[f'{name}']
+    tiles = apply_rotation(tiles, rotation)
+    tiles = apply_mirror(tiles, mirror)
+    AI_field = draw_tile(player_id, AI_field, tiles, x, y, return_field = True)
+    return AI_field
+
+def place_tile(local_field, name, x, y, rotation, mirror, AI = False):
     global log
     global move_count
     global active_tile
-    color = colors[player_id]
     if(check_piece(name, player_id)):
         tiles = globals()[f'{name}']
         tiles = apply_rotation(tiles, rotation)
         tiles = apply_mirror(tiles, mirror)
         if field_rotation and not AI:
             tiles = apply_rotation(tiles, (4-int(field_rotation)) % 4)
-        if (check_move(player_id, field, tiles, x, y, True)):
+        if (check_move(player_id, local_field, tiles, x, y, True)):
+            draw_tile(player_id, local_field, tiles, x, y)
             globals()[f'player{player_id}_tiles'][f'{name}'] = 0
-            draw_tile(player_id, field, tiles, x, y)
             move_count += 1
             log.append(f"{player_id}_{name}_{x}_{y}_{rotation}_{mirror}_{field_rotation}")
             active_tile = "None"
@@ -276,16 +323,16 @@ def check_piece(name, id):
         return True
     return False
 
-def check_move(player_id, field, tiles, x, y, msg):
+def check_move(player_id, local_field, tiles, x, y, msg):
     if (move_count // len(players) == 0):
-        valid_first_move = check_first_move(field, tiles, x, y)
+        valid_first_move = check_first_move(local_field, tiles, x, y)
         if (valid_first_move == False):
             if (msg):
                 print("First tile should occupy square in a corner!")
             return False
     valid_boundaries = check_boundaries(tiles, x, y, msg)
     if (valid_boundaries):
-        valid_CAE = check_CAE(player_id, field, tiles, x, y, msg) #CAE = Corners And Edges
+        valid_CAE = check_CAE(player_id, local_field, tiles, x, y, msg) #CAE = Corners And Edges
         if (valid_CAE):
             return True
     return False
@@ -439,11 +486,13 @@ def check_boundaries(tiles, x, y, msg):
             print("Invalid location, out of map")
         return False
 
-def draw_tile(player_id, field, tiles, x, y):
+def draw_tile(player_id, field, tiles, x, y, return_field = False):
     for tile in tiles:
         vx = (tile % 5)-2
         vy = (tile // 5)-2
         field[y+vy][x+vx] = player_id
+    if return_field:
+        return field
 
 def draw_sidepanel():
     coords = 260*scale+2, 2, 394.5*scale, 315.5*scale
@@ -483,6 +532,10 @@ def draw_sidepanel():
 def draw_scoreboard():
     coords = 2, (260)*scale+2, (260)*scale+2, (315.5)*scale
     canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
+    if len(players) < 4:
+        for id in range(len(players)):
+            coords = 260/len(players)*id*scale+2, (260)*scale+2, 260/len(players)*(id+1)*scale+2, (315.5)*scale
+            canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
 
 def update():
     #print("updating")
@@ -554,7 +607,7 @@ def rotate(event=None, rotation_modifier=0):
     rotation = rotation % 4
     update()
 
-def count_corners():        # Counts squares for each player
+def count_corners(field):   # Counts squares for each player
                             # where he can place tiles on
                             # (Corners to previous tiles).
                             # Saves result to player{id}_corners
@@ -635,7 +688,7 @@ def undo(event):
         move_count -= 1
         print("Reverted the last move!")
         update()
-        moves = check_for_moves(player_id)
+        moves = check_for_moves(player_id, field)
         win.after(100, AI_move)
     else:
         print("There is nothing to undo!")
@@ -658,12 +711,12 @@ def change_mirror(event):
     mirror %= 2
     update()
 
-def check_for_moves(player_id): # Checks for moves for a player id.
+def check_for_moves(player_id, field): # Checks for moves for a player id.
                                 # Returns False if 0, moves if at least 1 move.
                                 # Appends moves to moves=[] for AI and hint()
     global moves
     moves = []
-    print(f"""Player {player_id} corners: {globals()[f"Player{player_id}_corners"]}""")
+    #print(f"""Player {player_id} corners: {globals()[f"Player{player_id}_corners"]}""")
     corners = globals()[f"Player{player_id}_corners"]
     for name in tiles_list:  # goes through every tile name in tile_list
         tiles = globals()[f"{name}"]
@@ -705,8 +758,8 @@ def check_for_moves(player_id): # Checks for moves for a player id.
                             #print(f"Tile {name} does not fit in {x-vx}, {y-vy} with rotation: {rotation} and mirror: {mirror}")
                             pass
 
-    print(f"moves = {moves}")
-    print(f"Amount of moves: {len(moves)}")
+    #print(f"moves = {moves}")
+    #print(f"Amount of moves: {len(moves)}")
     if ((not moves) and move_count // len(players) != 0):
         return False
     return moves
@@ -926,8 +979,8 @@ def button_apply_and_restart():
     player_types = []
     for id, player in enumerate(players):
         player_types.append(globals()[f'combobox_player_type_{id}'].get())
-    count_corners()
-    moves = check_for_moves(0)
+    count_corners(field)
+    moves = check_for_moves(0, field)
     AI_move()
 
 def change_player_names():
@@ -984,12 +1037,12 @@ combobox_player_type_0.bind("<<ComboboxSelected>>", check_apply_button_state)
 combobox_player_type_1.bind("<<ComboboxSelected>>", check_apply_button_state)
 combobox_player_type_2.bind("<<ComboboxSelected>>", check_apply_button_state)
 combobox_player_type_3.bind("<<ComboboxSelected>>", check_apply_button_state)
-win.option_add('*TCombobox*Listbox.font', combobox_font)
-combobox_field.current(2)
 combobox_player_type_0.current(0)
 combobox_player_type_1.current(0)
 combobox_player_type_2.current(0)
 combobox_player_type_3.current(0)
+win.option_add('*TCombobox*Listbox.font', combobox_font)
+combobox_field.current(2)
 radio_players.set(str(len(players)))
 update()
 draw_options()
