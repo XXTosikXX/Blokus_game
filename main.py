@@ -28,6 +28,7 @@ field_values = ['10x10 (very small)', '12x12 (small)', '14x14 (standard)', '16x1
 player_values = ['Player', 'AI level 1', 'AI level 2', 'AI level 3']
 tiles_list = ["I5", "I4", "I3", "I2", "I1", "U5", "O4", "X5", "P5", "W5",
 "T5", "T4", "V5", "V3", "Z5", "Z4", "F5", "L5", "L4", "N5", "Y5"]
+sidepanel_id = 0
 I5 = [2, 7, 12, 17, 22]
 I4 = [7, 12, 17, 22]
 I3 = [7, 12, 17]
@@ -157,6 +158,7 @@ def click_event(event):
     if (game_state == "Options"):
         return
     global player_id
+    global sidepanel_id
     global active_tile
     x = event.x
     y = event.y
@@ -172,7 +174,7 @@ def click_event(event):
         SqX, SqY = field_size-1-SqY, SqX
     #print(f"Coords: {SqX}, {SqY}")
     if (SqX >= field_size or SqY >= field_size or SqX < 0 or SqY < 0):
-        if (x >= 268*scale and x <= 388*scale and y >= 40*scale and y <= (40+38*7)*scale):  #sidepanel gets clicked
+        if (x >= 268*scale and x <= 388*scale and y >= 40*scale and y <= (40+38*7)*scale and sidepanel_id == player_id):  #sidepanel gets clicked
             vx = int((x/scale - 260 - 8) / 40)
             vy = int((y/scale - 40) / 38)
             id = player_id
@@ -182,9 +184,21 @@ def click_event(event):
                 active_tile = tile_name
             else:
                 active_tile = "None"
-
+        elif (x >= 0 and x <= 260*scale and y >= 250*scale and y <= 315.5*scale):
+            active_tile = None
+            if len(players) < 4:
+                id = int(x//(270*scale/len(players)))
+            elif not team_mode:
+                id = int(2*((y-260*scale)//(27.75*scale))+(x//(130*scale+2)))
+            else:
+                id = int(2*((y-260*scale)//(19*scale))+(x//(130*scale+2)))
+            if id >= 4 or id < 0:
+                return
+            sidepanel_id = id
+            if player_id != sidepanel_id:
+                active_tile = "None"
     else: #field gets clicked
-        if (active_tile != "None"):
+        if (active_tile != "None" and sidepanel_id == player_id):
             if (place_tile(field, active_tile, SqX, SqY, rotation, mirror)):
                 find_and_select_next_player()
         else:
@@ -192,6 +206,7 @@ def click_event(event):
     update()
 
 def find_and_select_next_player():
+    global sidepanel_id
     id = player_id+1
     for vid in range(len(players)):
         next_id = (id+vid) % len(players)
@@ -200,6 +215,7 @@ def find_and_select_next_player():
         moves = check_for_moves(next_id, field)
         if (moves):
             change_player(next_id)
+            sidepanel_id = player_id
             if (player_types[next_id] != "Player"):
                 update()
                 win.after(100, AI_move)
@@ -292,7 +308,7 @@ def place_tile(local_field, name, x, y, rotation, mirror, AI = False):
         tiles = apply_rotation(tiles, rotation)
         tiles = apply_mirror(tiles, mirror)
         if field_rotation and not AI:
-            tiles = apply_rotation(tiles, (4-int(field_rotation)) % 4)
+            tiles = apply_rotation(tiles, (4-int(field_rotation))%4)
         if (check_move(player_id, local_field, tiles, x, y, True)):
             draw_tile(player_id, local_field, tiles, x, y)
             globals()[f'player{player_id}_tiles'][f'{name}'] = 0
@@ -499,9 +515,7 @@ def draw_sidepanel():
     canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
     coords = (8+260)*scale, 2.5*scale, (8+260+120)*scale, (2.5+36)*scale
     canvas.create_rectangle(coords, fill = "#eeeeee")
-    """l = Label(win, width = int(10), height = int(1), text = "active_player")
-    l.place(x=260, y=20)""" # LABEL TODO
-    tile_list = list(globals()[f'player{player_id}_tiles'].items())
+    tile_list = list(globals()[f'player{sidepanel_id}_tiles'].items())
     for ny in range(7):
         for nx in range(3):
             coords = (260+nx*40+8)*scale, (40+ny*38)*scale, (260+(nx+1)*40+8)*scale, (40+(ny+1)*38)*scale
@@ -517,10 +531,10 @@ def draw_sidepanel():
                 border = 1
                 outline_color = '#000000'
             canvas.create_rectangle(coords, fill = "#ffffff", outline = outline_color, width = border)
-            if (globals()[f"player{player_id}_tiles"][f'{tile_name}'] == 0):
+            if (globals()[f"player{sidepanel_id}_tiles"][f'{tile_name}'] == 0):
                 color = "#aaaaaa"
             else:
-                color = colors[player_id]
+                color = colors[sidepanel_id]
             for square in tile:
                 vx = (square % 5)
                 vy = (square // 5)
@@ -530,12 +544,70 @@ def draw_sidepanel():
             canvas.create_oval(coords, fill = "#000000")
 
 def draw_scoreboard():
+    text_font = font.Font(size=int(8*scale))
+    score_list = count_score()
     coords = 2, (260)*scale+2, (260)*scale+2, (315.5)*scale
     canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
     if len(players) < 4:
         for id in range(len(players)):
-            coords = 260/len(players)*id*scale+2, (260)*scale+2, 260/len(players)*(id+1)*scale+2, (315.5)*scale
-            canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
+            coords = 260/len(players)*id*scale+2, (260)*scale, 260/len(players)*(id+1)*scale+2, (315.5)*scale
+            if player_id == id:
+                canvas.create_rectangle(coords, fill = "white", outline = f"black", width=1)
+            else:
+                canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
+            coords = (260/len(players))*(id+0.5)*scale+2, (260+10)*scale
+            globals()[f"name_{id}"] = canvas.create_text(coords, text=f"{players[id]}", fill="black", font=text_font)
+            coords = (260/len(players)*id+5)*scale+2, (315.5-5)*scale+2, (260/len(players)*id+15)*scale+2, (315.5-15)*scale
+            canvas.create_rectangle(coords, fill = colors[id], outline = "#888888", width=1)
+            coords = (260/len(players))*(id+1-0.04)*scale+2, (315.5-10)*scale
+            globals()[f"score_{id}"] = canvas.create_text(coords, text=f"Score: {score_list[id]}", fill="black", font=text_font, anchor="e")
+            size = canvas.bbox(globals()[f"name_{id}"])
+            if (size[2]-size[0])/scale >= 260/len(players):
+                print(f"Name for {players[id]} doesnt fit!")
+                players[id] = players[id][0:-1]
+                draw_scoreboard()
+    elif not team_mode:
+        for id in range(len(players)):
+            coords = (130*(id%2))*scale+2, (260+27.75*(id//2))*scale, (130*(id%2+1))*scale+2, (260+27.75*(id//2+1))*scale
+            if player_id == id:
+                canvas.create_rectangle(coords, fill = "white", outline = "black", width=1)
+            else:
+                canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
+            coords = (65+130*(id%2))*scale+2, (260+8+27.75*(id//2))*scale
+            globals()[f"name_{id}"] = canvas.create_text(coords, text=f"{players[id]}", fill="black", font=text_font)
+            coords = (5+130*(id%2))*scale+2, (315.5-5-27.75*(1-(id//2)))*scale, (15+130*(id%2))*scale+2, (315.5-15-27.75*(1-(id//2)))*scale
+            canvas.create_rectangle(coords, fill = colors[id], outline = "#888888", width=1)
+            coords = (100+130*(id%2))*scale+2, (260+20+27.75*(id//2))*scale
+            globals()[f"score_{id}"] = canvas.create_text(coords, text=f"Score: {score_list[id]}", fill="black", font=text_font)
+            size = canvas.bbox(globals()[f"name_{id}"])
+            if (size[2]-size[0])/scale >= 260/len(players):
+                print(f"Name for {players[id]} doesnt fit!")
+                players[id] = players[id][0:-1]
+                draw_scoreboard()
+    else:
+        coords = 2, (260)*scale, 130*scale+2, (315.5)*scale
+        canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
+        coords = 130*scale+2, (260)*scale, 260*scale+2, (315.5)*scale
+        canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
+        for id in range(len(players)):
+            coords = ((130)*(id%2))*scale+2, (260+19*(id//2))*scale, ((130)*(id%2+1))*scale+2, (260+20+19*(id//2))*scale
+            count_corners(field)
+            if player_id == id:
+                canvas.create_rectangle(coords, fill = "white", outline = "black", width=1)
+            else:
+                canvas.create_rectangle(coords, fill = "#cccccc", outline = "black", width=1)
+            coords = ((130)*(id%2)+5)*scale+2, (260+19*(id//2)+5)*scale+1, ((130)*(id%2)+15)*scale+2, (260+19*(id//2)+15)*scale+1
+            canvas.create_rectangle(coords, fill = colors[id], outline = "#888888", width=1)
+            coords = ((130)*(id%2)+24)*scale+2, (260+19*(id//2)+5)*scale
+            globals()[f"name_{id}"] = canvas.create_text(coords, text=f"{players[id]}", fill="black", font=text_font, anchor="nw")
+            size = canvas.bbox(globals()[f"name_{id}"])
+            if (size[2]-size[0])/scale >= 105:
+                print(f"Name for {players[id]} doesnt fit!")
+                players[id] = players[id][0:-1]
+                draw_scoreboard()
+            if id // 2 == 1:
+                coords = (130)*(id%2+0.75)*scale+2, (315.5-8)*scale
+                globals()[f"score_{id}"] = canvas.create_text(coords, text=f"Score: {score_list[id]+score_list[id-2]}", fill="black", font=text_font)
 
 def update():
     #print("updating")
@@ -544,12 +616,23 @@ def update():
         draw_field(field, canvas)
         draw_sidepanel()
         draw_scoreboard()
+        update_canvas_font()
     elif (game_state == "Options"):
-        update_font()
+        update_options_font()
         frame.config(width=startX*scale, height=startY*scale)
         check_team_mode()
 
-def update_font():
+def update_canvas_font():
+    text_font = font.Font(size=int(8*scale))
+    for id in range(len(players)):
+        canvas.itemconfig(globals()[f"name_{id}"], font=text_font)
+        if not team_mode:
+            canvas.itemconfig(globals()[f"score_{id}"], font=text_font)
+        else:
+            if id//2 == 1:
+                canvas.itemconfig(globals()[f"score_{id}"], font=text_font)
+
+def update_options_font():
     text_font = font.Font(size=int(9*scale))
     restart_font = font.Font(size=int(6*scale))
     combobox_font = font.Font(size=int(9*scale))
@@ -666,32 +749,33 @@ def check_corners(id, x, y):
         return True
     return False
 
-def undo(event):
+def undo(event=None):
     if (len(log) >= 1):
         global player_id
         global move_count
         global moves
+        global sidepanel_id
         last_move = log.pop()
         player, name, x, y, rotation, mirror, field_rotation = last_move.split('_')
-        print(f"""  ###################
-                    rotation: {rotation}
-                    field_rotation: {field_rotation}
-                    """)
         tiles = globals()[f'{name}']
+        rotation = int(rotation)
         tiles = apply_rotation(tiles, int(rotation))
         tiles = apply_mirror(tiles, int(mirror))
-        if field_rotation:
+        if player_types[int(player)][0:2] != "AI":
             tiles = apply_rotation(tiles, (4-int(field_rotation))%4)
         draw_tile("#", field, tiles, int(x), int(y))
         player_id = int(player)
         globals()[f'player{player_id}_tiles'][f'{name}'] += 1
         move_count -= 1
+        sidepanel_id = player_id
         print("Reverted the last move!")
         update()
         moves = check_for_moves(player_id, field)
-        win.after(100, AI_move)
+        if player_types[player_id][0:2] == "AI":
+            undo()
     else:
         print("There is nothing to undo!")
+        AI_move()
 
 def apply_mirror(tiles, mirror):
     if (mirror == 0):
@@ -711,9 +795,9 @@ def change_mirror(event):
     mirror %= 2
     update()
 
-def check_for_moves(player_id, field): # Checks for moves for a player id.
-                                # Returns False if 0, moves if at least 1 move.
-                                # Appends moves to moves=[] for AI and hint()
+def check_for_moves(player_id, field):  # Checks for moves for a player id.
+                                        # Returns False if 0, moves if at least 1 move.
+                                        # Appends moves to moves=[] for AI and hint()
     global moves
     moves = []
     #print(f"""Player {player_id} corners: {globals()[f"Player{player_id}_corners"]}""")
@@ -770,30 +854,33 @@ def compare_arrays(x, y):
             return False
     return True
 
-def game_over(event=None):
-    print("Its game over!")
-    print(f"""Score:""")
+def count_score():
     score_list = []
-    for id, player in enumerate(players):
+    for id in range(len(players)):
         locals()[f"Player{id}_score"] = 0
         all_pieces_placed = True
-        for item_id, item in enumerate(globals()[f"player{id}_tiles"].items()):
+        for item in globals()[f"player{id}_tiles"].items():
             if (item[1] == 1):
                 locals()[f"Player{id}_score"] -= int(item[0][1])
                 all_pieces_placed = False
         if (all_pieces_placed):
-            for str in reverse(log):
-                pl, name, x, y, rotation, mirrored = str.split("_")
-                if (pl == id):
+            for str in reversed(log):
+                pl, name, *_ = str.split("_")
+                if (int(pl) == id):
                     if (name == "I1"):
                         locals()[f"Player{id}_score"] = 20
                     else:
                         locals()[f"Player{id}_score"] = 15
                     break
+        score_list.append(locals()[f"Player{id}_score"])
+    return score_list
 
-        score = locals()[f"Player{id}_score"]
-        print(f"{player}: {score}")
-        score_list.append(score)
+def game_over(event=None):
+    print("Its game over!")
+    print(f"""Score:""")
+    score_list = count_score()
+    for id, score in enumerate(score_list):
+        print(f"{players[id]}: {score}")
     if (not team_mode):
         highest = max(score_list)
         winner_id = score_list.index(highest)
@@ -821,8 +908,10 @@ and {winners[2]} with {highest} points!")
         print(f"Team 2 score: {team2_score}")
         if (team1_score > team2_score):
             print(f"Team 1 ({players[0]} and {players[2]}) won with {team1_score} points!")
-        else:
+        elif (team1_score < team2_score):
             print(f"Team 2 ({players[1]} and {players[3]}) won with {team2_score} points!")
+        else:
+            print(f"It is a tie beetween Team 1 ({players[0]} and {players[2]}) and Team 2 ({players[1]} and {players[3]}) with {team1_score} points!")
 
 def new_game():
     print("New Game")
@@ -965,10 +1054,12 @@ def button_apply_and_restart():
     global team_mode
     global player_types
     global moves
+    global sidepanel_id
     reset_player_tiles()
     change_player(0)
     field_size = int(combobox_field.get()[0:2])
     field = generate_field(field_size, field_size)
+    sidepanel_id = 0
     move_count = 0
     rotation = 0
     mirror = 0
