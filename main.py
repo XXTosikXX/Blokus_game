@@ -170,7 +170,6 @@ def draw_field(field, canvas):
 def draw_square(x, y, color, canvas, width=1, insert_color=None):
     a = 260/field_size * scale
     coords = 2+x*a, 2+y*a, 2+(x+1)*a, 2+(y+1)*a
-    canvas.create_rectangle(coords, fill = color, width=width)
     if insert_color != None:
         color = insert_color
         width = 0
@@ -179,14 +178,14 @@ def draw_square(x, y, color, canvas, width=1, insert_color=None):
         canvas.create_rectangle(coords, fill = color, width=width)
         return
     if square_style == "Old":
-        #canvas.create_rectangle(coords, fill = color, outline="#cccccc", width=width)
+        canvas.create_rectangle(coords, fill = color, outline="#eeeeee", width=width)
         if (color != "#eeeeee" and color != "#fafafa"):
             coords = 2+x*a+2*scale, 2+y*a+2*scale, 2+x*a+9*scale, 2+y*a+2*scale
             canvas.create_line(coords, fill = "white", width=1*scale)
             coords = 2+x*a+2*scale, 2+y*a+2*scale, 2+x*a+2*scale, 2+y*a+5*scale
             canvas.create_line(coords, fill = "white", width=1*scale)
-    """else:
-        canvas.create_rectangle(coords, fill = color, width=width)"""
+        return
+    canvas.create_rectangle(coords, fill = color, width=width)
 
 def click_event(event):
     if (game_state == "Options"):
@@ -884,7 +883,7 @@ def change_mirror(event):
     global mirror
     mirror += 1
     mirror %= 2
-    update()
+    hover_event()
 
 def check_for_moves(player_id, field):  # Checks for moves for a player id.
                                         # Returns False if 0, moves if at least 1 move.
