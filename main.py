@@ -15,7 +15,10 @@ players = ["Player 1", "Player 2"]
 player_types = ["Player", "Player"]
 player_id = 0
 colors = ["#6666ff", "#ffff66", "#ff6666", "#66ff66"]
+old_colors = ["#2222cc", "#aaaa22", "#cc2222", "#22cc22"]
+hollow_colors = ["#bbbbff", "#ffffbb", "#ffbbbb", "#bbffbb"]
 active_tile = "None"
+square_style = "Normal" # Normal, Old, 3D
 move_count = 0
 rotation = 0
 field_rotation = 0
@@ -100,7 +103,7 @@ def turn_field(event = None, rotate_to = None):
         else:
             field_rotation -= 1
             field_rotation = field_rotation % 4
-    update()
+    hover_event()
 
 def rezoom(event = None):
     global scale
@@ -140,19 +143,50 @@ def draw_field(field, canvas):
     rotated_field = turn_field(rotate_to=field_rotation)
     for row, y in enumerate(rotated_field):
         for column, x in enumerate(y):
-            if (x == "#"):
+            if (type(x) == str and x == "#"):
                 if ((column + row) % 2 == 0):
                     color = "#fafafa"
                 else:
                     color = "#eeeeee"
+                draw_square(column, row, color, canvas)
+            elif (x>=0 and x<= 3):
+                if (square_style == "Normal"):
+                    color = colors[x]
+                    draw_square(column, row, color, canvas)
+                elif (square_style == "Old"):
+                    color = old_colors[x]
+                    draw_square(column, row, color, canvas)
+                elif (square_style == "3D"):
+                    color = colors[x]
+                    draw_square(column, row, color, canvas, insert_color=old_colors[x])
             else:
-                color = colors[x]
-            draw_square(column, row, color, canvas)
+                x %= 4
+                color = hollow_colors[x]
+                if square_style != "3D":
+                    draw_square(column, row, color, canvas)
+                else:
+                    draw_square(column, row, color, canvas, insert_color=colors[x])
 
-def draw_square(x, y, color, canvas):
+def draw_square(x, y, color, canvas, width=1, insert_color=None):
     a = 260/field_size * scale
     coords = 2+x*a, 2+y*a, 2+(x+1)*a, 2+(y+1)*a
-    canvas.create_rectangle(coords, fill = color)
+    canvas.create_rectangle(coords, fill = color, width=width)
+    if insert_color != None:
+        color = insert_color
+        width = 0
+        a = 260/field_size * scale
+        coords = 2+2*scale+x*a, 2+2*scale+y*a, 2+(x+1)*a-2*scale, 2+(y+1)*a-2*scale
+        canvas.create_rectangle(coords, fill = color, width=width)
+        return
+    if square_style == "Old":
+        #canvas.create_rectangle(coords, fill = color, outline="#cccccc", width=width)
+        if (color != "#eeeeee" and color != "#fafafa"):
+            coords = 2+x*a+2*scale, 2+y*a+2*scale, 2+x*a+9*scale, 2+y*a+2*scale
+            canvas.create_line(coords, fill = "white", width=1*scale)
+            coords = 2+x*a+2*scale, 2+y*a+2*scale, 2+x*a+2*scale, 2+y*a+5*scale
+            canvas.create_line(coords, fill = "white", width=1*scale)
+    """else:
+        canvas.create_rectangle(coords, fill = color, width=width)"""
 
 def click_event(event):
     if (game_state == "Options"):
@@ -185,9 +219,9 @@ def click_event(event):
             else:
                 active_tile = "None"
         elif (x >= 0 and x <= 260*scale and y >= 250*scale and y <= 315.5*scale):
-            active_tile = None
+            active_tile = "None"
             if len(players) < 4:
-                id = int(x//(270*scale/len(players)))
+                id = int(x//((260*scale+2)/len(players)))
             elif not team_mode:
                 id = int(2*((y-260*scale)//(27.75*scale))+(x//(130*scale+2)))
             else:
@@ -199,11 +233,57 @@ def click_event(event):
                 active_tile = "None"
     else: #field gets clicked
         if (active_tile != "None" and sidepanel_id == player_id):
+            remove_hint()
             if (place_tile(field, active_tile, SqX, SqY, rotation, mirror)):
                 find_and_select_next_player()
+            else:
+                hover_event()
         else:
             print("Select the tile first")
     update()
+
+def hover_event(event=None):
+    if game_state == "Game":
+        if active_tile != "None":
+            tiles = globals()[f"{active_tile}"]
+            tiles = apply_rotation(tiles, rotation)
+            tiles = apply_mirror(tiles, mirror)
+            tiles = apply_rotation(tiles, (4-int(field_rotation))%4)
+            if (event != None):
+                x = int(event.x/(260/field_size*scale))
+                y = int(event.y/(260/field_size*scale))
+                global last_hover_x, last_hover_y
+                last_hover_x = x
+                last_hover_y = y
+            else:
+                x = last_hover_x
+                y = last_hover_y
+            if field_rotation == 2:
+                SqX = field_size-1 - x
+                SqY = field_size-1 - y
+            elif field_rotation == 1:
+                SqX, SqY = y, field_size-1-x
+            elif field_rotation == 3:
+                SqX, SqY = field_size-1-y, x
+            else:
+                SqX = x
+                SqY = y
+            if check_boundaries(tiles, SqX, SqY, False):
+                remove_hint()
+                if no_overlapping(field, tiles, SqX, SqY):
+                    draw_tile(player_id+4, field, tiles, SqX, SqY)
+            else:
+                remove_hint()
+
+    update()
+
+def no_overlapping(field, tiles, x, y):
+    for tile in tiles:
+        vx = (tile % 5)-2
+        vy = (tile // 5)-2
+        if field[y+vy][x+vx] == 0 or field[y+vy][x+vx] == 1 or field[y+vy][x+vx] == 2 or field[y+vy][x+vx] == 3:
+            return False
+    return True
 
 def find_and_select_next_player():
     global sidepanel_id
@@ -260,11 +340,21 @@ def AI_move():
                 AI_field = AI_place_tile(AI_field, name, int(x), int(y), int(rotation), int(mirror))
                 count_corners(AI_field)
                 score = len(globals()[f'Player{player_id}_corners'])
-                for id in range(len(players)):
-                    if id != player_id:
-                        score -= len(globals()[f'Player{id}_corners'])
-                score += 2*int(name[-1])
-                move_scores.append(score)
+                if not team_mode:
+                    for id in range(len(players)):
+                        if id != player_id:
+                            score -= len(globals()[f'Player{id}_corners'])
+                    score += 2*int(name[-1])
+                    move_scores.append(score)
+                else:
+                    for id in range(len(players)):
+                        if id != player_id:
+                            if id % 2 == player_id % 2:
+                                score += len(globals()[f'Player{id}_corners'])
+                            else:
+                                score -= len(globals()[f'Player{id}_corners'])
+                    score += int(name[-1])
+                    move_scores.append(score)
             best_move = max(move_scores)
             deleted = 0
             for index, move in enumerate(move_scores.copy()):
@@ -688,7 +778,8 @@ def rotate(event=None, rotation_modifier=0):
     elif (rotation_modifier == 1 or char == 'e'):
         rotation += 1
     rotation = rotation % 4
-    update()
+    hover_event(event=None)
+    #update()
 
 def count_corners(field):   # Counts squares for each player
                             # where he can place tiles on
@@ -917,7 +1008,25 @@ def new_game():
     print("New Game")
 
 def hint():
-    print("Giving a hint!")
+    global moves
+    global active_tile
+    remove_hint()
+    active_tile = "None"
+    move = random.choice(moves)
+    name, x, y, rotation, mirror = move.split("_")
+    tiles = globals()[f"{name}"]
+    tiles = apply_rotation(tiles, int(rotation))
+    tiles = apply_mirror(tiles, int(mirror))
+    draw_tile(player_id+4, field, tiles, int(x), int(y))
+    update()
+
+def remove_hint():
+    global field
+    for y, row in enumerate(field):
+        for x, value in enumerate(row):
+            if (type(value) != str and value >= 4):
+                field[y][x] = "#"
+    #update()
 
 def combobox_field_selected(event=None):
     options_field_size = combobox_field.get()
@@ -940,25 +1049,36 @@ def check_apply_button_state(event=None):
             return
     apply["state"] = 'normal'
 
+def change_square_style(string):
+    global menu_style
+    global square_style
+    disable = string
+    disable_id = menu_style.index(disable)
+    menu_style.entryconfig(disable_id, state="disabled")
+    enable = square_style
+    enable_id = menu_style.index(enable)
+    menu_style.entryconfig(enable_id, state="normal")
+    square_style = string
+    update()
+
 def create_menu():
+    global menu_style
     menu_game = Menu(menubar)
     menubar.add_cascade(menu=menu_game, label='Game')
     menu_game.add_command(label='New Game', command=new_game)
     menu_game.entryconfigure('New Game', accelerator='Control+N')
+    menu_game.add_command(label='Undo', command=undo)
+    menu_game.entryconfigure('Undo', accelerator='Control+Z')
 
-    map_size = IntVar()
-    map_size.set(14)
-    menu_map_size = Menu(menubar)
-    menu_map_size.add_radiobutton(label='10x10 (very small)', variable=map_size, value=10)
-    menu_map_size.add_radiobutton(label='12x12 (small)', variable=map_size, value=12)
-    menu_map_size.add_radiobutton(label='14x14 (standard)', variable=map_size, value=14)
-    menu_map_size.add_radiobutton(label='16x16 (big)', variable=map_size, value=16)
-    menu_map_size.add_radiobutton(label='18x18 (large)', variable=map_size, value=18)
-    menu_map_size.add_radiobutton(label='20x20 (extra large)', variable=map_size, value=20)
+    menu_style = Menu(menubar)
+    menu_style.add_command(label='Normal', state = "disabled", command = lambda: change_square_style("Normal"))
+    menu_style.add_command(label='Old', command = lambda: change_square_style("Old"))
+    menu_style.add_command(label='3D', command = lambda: change_square_style("3D"))
 
     menu_options = Menu(menubar)
     menubar.add_cascade(menu=menu_options, label='Options')
-    menu_options.add_cascade(menu=menu_map_size, label='Map Size')
+    menu_options.add_cascade(menu=menu_style, label='Square style')
+
 
     menu_help = Menu(menubar)
     menu_help.add_command(label='Hint', command=hint)
@@ -1148,6 +1268,7 @@ win.bind("v", turn_field, add = "+")
 win.bind("<Control-z>", undo)
 win.bind("s", change_mirror)
 win.bind("<Escape>", change_game_state)
+win.bind("<Motion>", hover_event)
 win.minsize(400, 320)
 win.geometry("404x324")
 win.title("Blokus game")
