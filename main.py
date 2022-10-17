@@ -2,6 +2,7 @@ from tkinter import *
 import tkinter.font as font
 from tkinter import ttk
 import random
+import winsound
 
 moves = []
 game_state = "Options"
@@ -13,6 +14,7 @@ startX = 400 - 4
 startY = 320 - 4
 players = ["Player 1", "Player 2"]
 player_types = ["Player", "Player"]
+has_moves = [1, 1]
 player_id = 0
 colors = ["#6666ff", "#ffff66", "#ff6666", "#66ff66"]
 old_colors = ["#2222cc", "#aaaa22", "#cc2222", "#22cc22"]
@@ -169,23 +171,22 @@ def draw_field(field, canvas):
 
 def draw_square(x, y, color, canvas, width=1, insert_color=None):
     a = 260/field_size * scale
-    coords = 2+x*a, 2+y*a, 2+(x+1)*a, 2+(y+1)*a
-    if insert_color != None:
-        color = insert_color
-        width = 0
-        a = 260/field_size * scale
-        coords = 2+2*scale+x*a, 2+2*scale+y*a, 2+(x+1)*a-2*scale, 2+(y+1)*a-2*scale
-        canvas.create_rectangle(coords, fill = color, width=width)
-        return
     if square_style == "Old":
+        coords = 2+x*a, 2+y*a, 2+(x+1)*a, 2+(y+1)*a
         canvas.create_rectangle(coords, fill = color, outline="#eeeeee", width=width)
         if (color != "#eeeeee" and color != "#fafafa"):
             coords = 2+x*a+2*scale, 2+y*a+2*scale, 2+x*a+9*scale, 2+y*a+2*scale
             canvas.create_line(coords, fill = "white", width=1*scale)
             coords = 2+x*a+2*scale, 2+y*a+2*scale, 2+x*a+2*scale, 2+y*a+5*scale
             canvas.create_line(coords, fill = "white", width=1*scale)
-        return
-    canvas.create_rectangle(coords, fill = color, width=width)
+    elif square_style == "Normal":
+        coords = 2+x*a, 2+y*a, 2+(x+1)*a, 2+(y+1)*a
+        canvas.create_rectangle(coords, fill = color, width=width)
+    elif square_style == "3D":
+        if (color != "#eeeeee" and color != "#fafafa"):
+            coords = 2+x*a, 2+y*a, 2+(x+1)*a, 2+(y+1)*a
+            coords = 2+2*scale+x*a, 2+2*scale+y*a, 2+(x+1)*a-2*scale, 2+(y+1)*a-2*scale
+            canvas.create_rectangle(coords, fill = color, width=width)
 
 def click_event(event):
     if (game_state == "Options"):
@@ -213,10 +214,13 @@ def click_event(event):
             id = player_id
             tile_list = list(globals()[f'player{id}_tiles'].items())
             tile_name = tile_list[vy*3+vx][0]
-            if (active_tile != tile_name):
+            if (active_tile != tile_name) and player_types[player_id][0:2] != "AI":
+                print(player_types[player_id])
                 active_tile = tile_name
-            else:
+                winsound.PlaySound('Sounds/selected.wav', winsound.SND_FILENAME|winsound.SND_ASYNC|winsound.SND_NODEFAULT)
+            elif player_types[player_id][0:2] != "AI" and (active_tile == tile_name):
                 active_tile = "None"
+                winsound.PlaySound('Sounds/selected.wav', winsound.SND_FILENAME|winsound.SND_ASYNC|winsound.SND_NODEFAULT)
         elif (x >= 0 and x <= 260*scale and y >= 250*scale and y <= 315.5*scale):
             active_tile = "None"
             if len(players) < 4:
@@ -249,8 +253,8 @@ def hover_event(event=None):
             tiles = apply_mirror(tiles, mirror)
             tiles = apply_rotation(tiles, (4-int(field_rotation))%4)
             if (event != None):
-                x = int(event.x/(260/field_size*scale))
-                y = int(event.y/(260/field_size*scale))
+                x = int(event.x/(262/field_size*scale))
+                y = int(event.y/(262/field_size*scale))
                 global last_hover_x, last_hover_y
                 last_hover_x = x
                 last_hover_y = y
@@ -286,6 +290,7 @@ def no_overlapping(field, tiles, x, y):
 
 def find_and_select_next_player():
     global sidepanel_id
+    global has_moves
     id = player_id+1
     for vid in range(len(players)):
         next_id = (id+vid) % len(players)
@@ -302,17 +307,56 @@ def find_and_select_next_player():
             break
         else:
             print(f"{players[next_id]} has no more moves!")
+            if has_moves[next_id]:
+                has_moves[next_id] = 0
     else:
+        update()
         game_over()
+
+def calculate_move_scores(moves, field):
+    move_scores = []
+    for move in moves:
+        AI_field = copy_field(field)
+        name, x, y, rotation, mirror = move.split("_")
+        AI_field = AI_place_tile(AI_field, player_id, name, int(x), int(y), int(rotation), int(mirror))
+        count_corners(AI_field)
+        score = len(globals()[f'Player{player_id}_corners'])
+        if not team_mode:
+            for id in range(len(players)):
+                if id != player_id:
+                    score -= len(globals()[f'Player{id}_corners'])
+            score += 2*int(name[-1])
+            move_scores.append(score)
+        else:
+            for id in range(len(players)):
+                if id != player_id:
+                    if id % 2 == player_id % 2:
+                        score += len(globals()[f'Player{id}_corners'])
+                    else:
+                        score -= len(globals()[f'Player{id}_corners'])
+            score += int(name[-1])
+            move_scores.append(score)
+    return move_scores
+
+def select_best_scores(move_scores, moves):
+    best_move = max(move_scores)
+    deleted = 0
+    for index, move in enumerate(move_scores.copy()):
+        #print(f"move : {move}, score: {best_move}")
+        if move != best_move:
+            move_scores.remove(move)
+            moves.pop(index-deleted)
+            deleted += 1
+    return move_scores, moves
 
 def AI_move():
     global move_count
     global moves
     if (player_types[player_id][0:2] != "AI"):
         return
+    count_corners(field)
+    moves = check_for_moves(player_id, field)
     if (player_types[player_id][-1] == "1"):
-        count_corners(field)
-        moves = check_for_moves(player_id, field)
         if (moves):
             move = random.choice(moves)
             name, x, y, rotation, mirror = move.split("_")
@@ -329,49 +373,92 @@ def AI_move():
             find_and_select_next_player()
             update()
     elif (player_types[player_id][-1] == "2"):
-        count_corners(field)
-        moves = check_for_moves(player_id, field)
         if (moves):
-            move_scores = []
-            for move in moves:
-                AI_field = copy_field(field)
-                name, x, y, rotation, mirror = move.split("_")
-                AI_field = AI_place_tile(AI_field, name, int(x), int(y), int(rotation), int(mirror))
-                count_corners(AI_field)
-                score = len(globals()[f'Player{player_id}_corners'])
-                if not team_mode:
-                    for id in range(len(players)):
-                        if id != player_id:
-                            score -= len(globals()[f'Player{id}_corners'])
-                    score += 2*int(name[-1])
-                    move_scores.append(score)
-                else:
-                    for id in range(len(players)):
-                        if id != player_id:
-                            if id % 2 == player_id % 2:
-                                score += len(globals()[f'Player{id}_corners'])
-                            else:
-                                score -= len(globals()[f'Player{id}_corners'])
-                    score += int(name[-1])
-                    move_scores.append(score)
-            best_move = max(move_scores)
-            deleted = 0
-            for index, move in enumerate(move_scores.copy()):
-                #print(f"move : {move}, score: {best_move}")
-                if move != best_move:
-                    move_scores.remove(move)
-                    moves.pop(index-deleted)
-                    deleted += 1
+            move_scores = calculate_move_scores(moves, field)
+            move_scores, modified_moves = select_best_scores(move_scores, moves)
             if len(move_scores) > 1:
-                selected_move = random.choice(moves)
+                selected_move = random.choice(modified_moves)
             else:
-                selected_move = moves[0]
+                selected_move = modified_moves[0]
             name, x, y, rotation, mirror = selected_move.split("_")
             place_tile(field, name, int(x), int(y), int(rotation), int(mirror), AI = True)
             #print(f"Best selected move is: {selected_move} with score: {best_move}")
             #print(f"All best moves: {move_scores}")
             find_and_select_next_player()
             update()
+    elif (player_types[player_id][-1] == "3"):
+        """if move_count//len(players) == 0:
+            move_scores = calculate_move_scores(moves, field)
+            move_scores, modified_moves = select_best_scores(move_scores, moves)
+            if len(move_scores) > 1:
+                selected_move = random.choice(modified_moves)
+            else:
+                selected_move = modified_moves[0]
+            name, x, y, rotation, mirror = selected_move.split("_")
+            place_tile(field, name, int(x), int(y), int(rotation), int(mirror), AI = True)
+            #print(f"Best selected move is: {selected_move} with score: {best_move}")
+            #print(f"All best moves: {move_scores}")
+            find_and_select_next_player()
+            update()
+            return"""
+        move_scores = calculate_move_scores(moves, field)
+        move_scores, modified_moves = select_best_scores(move_scores, moves)
+        moves_array = modified_moves
+        new_moves_array = []
+        #print("All best moves for AI with lvl2 criteria:")
+        #print(moves_array)
+        for move in moves:
+            #placing already known moves
+            #print(f"Checking move: {move}")
+            AI_field = copy_field(field)
+            name, x, y, rotation, mirror = move.split("_")
+            #print(AI_field)
+            AI_field = AI_place_tile(AI_field, player_id, name, int(x), int(y), int(rotation), int(mirror))
+            #print(AI_field)
+            globals()[f"player{player_id}_tiles"][f"{name}"] = 0
+            #score counting:
+            count_corners(AI_field, counter=move_count+len(players))
+            #print(f"Player0_corners: {Player0_corners}")
+            #print(f"Player1_corners: {Player1_corners}")
+            moves_difference = check_for_moves(player_id, AI_field)
+            #print(moves_difference)
+            if not moves_difference:
+                #print("No moves after this Move!")
+                moves_difference = 0
+            else:
+                #print(f"After this move bot will have {len(moves_difference)} moves. These are:")
+                #print(moves_difference)
+                moves_difference = len(moves_difference)
+            for i in range(len(players)-1):
+                #print(f"Calculating moves for id {(player_id+1+i)%len(players)}")
+                count_corners(AI_field, counter=move_count+1+i)
+                moves = check_for_moves((player_id+1+i)%len(players), AI_field)
+                #print(f"Another player has {len(moves)} moves")
+                if not team_mode:
+                    if moves:
+                        #print(f"{moves_difference} - {len(moves)} = {moves_difference-len(moves)}")
+                        moves_difference -= len(moves)
+                else:
+                    if moves:
+                        if (player_id+1+i)%len(players)%2 == player_id%2:
+                            moves_difference += len(moves)
+                        else:
+                            moves_difference -= len(moves)
+            #print(f"Total diference in moves: {moves_difference}")
+            new_moves_array.append(moves_difference)
+            globals()[f"player{player_id}_tiles"][f"{name}"] = 1
+        #print(new_moves_array)
+        move_scores, modified_moves = select_best_scores(new_moves_array, moves_array)
+        if len(move_scores) > 1:
+            selected_move = random.choice(modified_moves)
+        else:
+            selected_move = modified_moves[0]
+        #print(selected_move)
+        #print(f"Best move:{selected_move}. Move difference is: {max(new_moves_array)} after this move")
+        name, x, y, rotation, mirror = selected_move.split("_")
+        place_tile(field, name, int(x), int(y), int(rotation), int(mirror), AI = True)
+        find_and_select_next_player()
+        update()
 
 def copy_field(field):
     new_field = []
@@ -381,7 +468,7 @@ def copy_field(field):
             new_field[row].append(x)
     return new_field
 
-def AI_place_tile(AI_field, name, x, y, rotation, mirror):
+def AI_place_tile(AI_field, player_id, name, x, y, rotation, mirror):
     tiles = globals()[f'{name}']
     tiles = apply_rotation(tiles, rotation)
     tiles = apply_mirror(tiles, mirror)
@@ -399,6 +486,7 @@ def place_tile(local_field, name, x, y, rotation, mirror, AI = False):
         if field_rotation and not AI:
             tiles = apply_rotation(tiles, (4-int(field_rotation))%4)
         if (check_move(player_id, local_field, tiles, x, y, True)):
+            winsound.PlaySound('Sounds/tile_place.wav', winsound.SND_FILENAME|winsound.SND_ASYNC|winsound.SND_NODEFAULT)
             draw_tile(player_id, local_field, tiles, x, y)
             globals()[f'player{player_id}_tiles'][f'{name}'] = 0
             move_count += 1
@@ -633,6 +721,7 @@ def draw_sidepanel():
             canvas.create_oval(coords, fill = "#000000")
 
 def draw_scoreboard():
+    global move_count
     text_font = font.Font(size=int(8*scale))
     score_list = count_score()
     coords = 2, (260)*scale+2, (260)*scale+2, (315.5)*scale
@@ -651,10 +740,13 @@ def draw_scoreboard():
             coords = (260/len(players))*(id+1-0.04)*scale+2, (315.5-10)*scale
             globals()[f"score_{id}"] = canvas.create_text(coords, text=f"Score: {score_list[id]}", fill="black", font=text_font, anchor="e")
             size = canvas.bbox(globals()[f"name_{id}"])
-            if (size[2]-size[0])/scale >= 260/len(players):
-                print(f"Name for {players[id]} doesnt fit!")
+            if (size[2]-size[0])/scale >= 260/len(players): # Not performance friendly!
+                print(f"Name for {players[id]} doesnt fit!")# TODO
                 players[id] = players[id][0:-1]
                 draw_scoreboard()
+            if move_count // len(players) != 0 and not has_moves[id]:
+                coords = 260/len(players)*id*scale+2, (260)*scale+1*scale, 260/len(players)*(id+1)*scale+2, (315.5)*scale-1*scale
+                canvas.create_line(coords, fill="#ff8888", width=2*scale)
     elif not team_mode:
         for id in range(len(players)):
             coords = (130*(id%2))*scale+2, (260+27.75*(id//2))*scale, (130*(id%2+1))*scale+2, (260+27.75*(id//2+1))*scale
@@ -673,6 +765,9 @@ def draw_scoreboard():
                 print(f"Name for {players[id]} doesnt fit!")
                 players[id] = players[id][0:-1]
                 draw_scoreboard()
+            if move_count // len(players) != 0 and not has_moves[id]:
+                coords = (130*(id%2))*scale+2, (260+27.75*(id//2))*scale+1*scale, (130*(id%2+1))*scale+2, (260+27.75*(id//2+1))*scale-1*scale
+                canvas.create_line(coords, fill="#ff8888", width=2*scale)
     else:
         coords = 2, (260)*scale, 130*scale+2, (315.5)*scale
         canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
@@ -697,6 +792,9 @@ def draw_scoreboard():
             if id // 2 == 1:
                 coords = (130)*(id%2+0.75)*scale+2, (315.5-8)*scale
                 globals()[f"score_{id}"] = canvas.create_text(coords, text=f"Score: {score_list[id]+score_list[id-2]}", fill="black", font=text_font)
+            if move_count // len(players) != 0 and not has_moves[id]:
+                coords = ((130)*(id%2))*scale+2, (260+19*(id//2))*scale+1*scale, ((130)*(id%2+1))*scale+2, (260+20+19*(id//2))*scale-1*scale
+                canvas.create_line(coords, fill="#ff8888", width=2*scale)
 
 def update():
     #print("updating")
@@ -780,10 +878,14 @@ def rotate(event=None, rotation_modifier=0):
     hover_event(event=None)
     #update()
 
-def count_corners(field):   # Counts squares for each player
-                            # where he can place tiles on
-                            # (Corners to previous tiles).
-                            # Saves result to player{id}_corners
+def count_corners(field, counter=None):     # Counts squares for each player
+                                            # where he can place tiles on
+                                            # (Corners to previous tiles).
+                                            # Saves result to player{id}_corners
+    if counter == None:
+        locals()["move_count"] = globals()["move_count"]
+    else:
+        locals()["move_count"] = counter
     for player in range(len(players)):
         globals()[f"Player{player}_corners"] = []
         if (move_count // len(players) == 0 and move_count <= player):
@@ -804,10 +906,12 @@ def count_corners(field):   # Counts squares for each player
         else:
             for row, y in enumerate(field):
                 for column, x in enumerate(y):
-                    if(check_corners(player, column, row)):
+                    if(check_corners(player, field, column, row)):
                         globals()[f"Player{player}_corners"].append(f"{column}_{row}")
+    """print(f"Player0_corners: {Player0_corners}")
+    print(f"Player1_corners: {Player1_corners}")"""
 
-def check_corners(id, x, y):
+def check_corners(id, field, x, y):
     edge_flag = True
     corner_flag = False
     if (field[y][x] == "#"):
@@ -863,6 +967,8 @@ def undo(event=None):
         moves = check_for_moves(player_id, field)
         if player_types[player_id][0:2] == "AI":
             undo()
+        else:
+            winsound.PlaySound('Sounds/undo.wav', winsound.SND_FILENAME|winsound.SND_ASYNC|winsound.SND_NODEFAULT)
     else:
         print("There is nothing to undo!")
         AI_move()
@@ -947,7 +1053,7 @@ def compare_arrays(x, y):
 def count_score():
     score_list = []
     for id in range(len(players)):
-        locals()[f"Player{id}_score"] = 0
+        locals()[f"Player{id}_score"] = 89
         all_pieces_placed = True
         for item in globals()[f"player{id}_tiles"].items():
             if (item[1] == 1):
@@ -958,18 +1064,21 @@ def count_score():
                 pl, name, *_ = str.split("_")
                 if (int(pl) == id):
                     if (name == "I1"):
-                        locals()[f"Player{id}_score"] = 20
+                        locals()[f"Player{id}_score"] += 20
                     else:
-                        locals()[f"Player{id}_score"] = 15
+                        locals()[f"Player{id}_score"] += 15
                     break
         score_list.append(locals()[f"Player{id}_score"])
     return score_list
 
 def game_over(event=None):
+    winsound.PlaySound('Sounds/win.wav', winsound.SND_FILENAME|winsound.SND_ASYNC|winsound.SND_NODEFAULT)
+    Text = "Its game over!\nScore:\n"
     print("Its game over!")
     print(f"""Score:""")
     score_list = count_score()
     for id, score in enumerate(score_list):
+        Text += f"{players[id]}: {score}\n"
         print(f"{players[id]}: {score}")
     if (not team_mode):
         highest = max(score_list)
@@ -981,27 +1090,40 @@ def game_over(event=None):
             if (score == highest):
                 winners.append(players[id])
         if (len(winners) == 1):
+            Text += f"{winners[0]} won with {highest} points!\n"
             print(f"{winners[0]} won with {highest} points!")
         elif (len(winners) == 2):
+            Text += f"It is a tie beetween {winners[0]} and {winners[1]} \
+with {highest} points!\n"
             print(f"It is a tie beetween {winners[0]} and {winners[1]} \
 with {highest} points!")
         elif (len(winners) == 3):
+            Text += f"It is a tie beetween {winners[0]}, {winners[1]} \
+and {winners[2]} with {highest} points!\n"
             print(f"It is a tie beetween {winners[0]}, {winners[1]} \
 and {winners[2]} with {highest} points!")
         else:
+            Text += f"It is a tie beetween {winners[0]}, {winners[1]}\
+, {winners[2]} and {winners[3]} with {highest} points!\n"
             print(f"It is a tie beetween {winners[0]}, {winners[1]}\
 , {winners[2]} and {winners[3]} with {highest} points!")
     else:
         team1_score = score_list[0] + score_list[2]
+        Text += f"Team 1 score: {team1_score}\n"
         print(f"Team 1 score: {team1_score}")
         team2_score = score_list[1] + score_list[3]
+        Text += f"Team 2 score: {team2_score}\n"
         print(f"Team 2 score: {team2_score}")
         if (team1_score > team2_score):
+            Text += f"Team 1 ({players[0]} and {players[2]}) won with {team1_score} points!\n"
             print(f"Team 1 ({players[0]} and {players[2]}) won with {team1_score} points!")
         elif (team1_score < team2_score):
+            Text += f"Team 2 ({players[1]} and {players[3]}) won with {team2_score} points!\n"
             print(f"Team 2 ({players[1]} and {players[3]}) won with {team2_score} points!")
         else:
+            Text += f"It is a tie beetween Team 1 ({players[0]} and {players[2]}) and Team 2 ({players[1]} and {players[3]}) with {team1_score} points!\n"
             print(f"It is a tie beetween Team 1 ({players[0]} and {players[2]}) and Team 2 ({players[1]} and {players[3]}) with {team1_score} points!")
+    show_message("Info", Text)
 
 def new_game():
     print("New Game")
@@ -1174,6 +1296,7 @@ def button_apply_and_restart():
     global player_types
     global moves
     global sidepanel_id
+    global has_moves
     reset_player_tiles()
     change_player(0)
     field_size = int(combobox_field.get()[0:2])
@@ -1189,6 +1312,7 @@ def button_apply_and_restart():
     player_types = []
     for id, player in enumerate(players):
         player_types.append(globals()[f'combobox_player_type_{id}'].get())
+    has_moves = [1]*len(players)
     count_corners(field)
     moves = check_for_moves(0, field)
     AI_move()
@@ -1203,6 +1327,18 @@ def reset_player_tiles():
     for id, player in enumerate(players):
         for tile in tiles_list:
             globals()[f"player{id}_tiles"][tile] = 1
+
+def show_message(title, text):
+    global top, win
+    top = Toplevel()
+    top.grab_set()
+    top.title(f"{title}")
+    top.geometry("300x240")
+    top.resizable(0, 0)
+    top.attributes("-toolwindow",1)
+    label_text = Label(top, text=text, font=("Arial", 12), bg="#eeeeee", justify=LEFT, wraplength=230)
+    label_text.pack(fill=BOTH, expand=True)
+    top.mainloop()
 
 field = generate_field(field_size, field_size)
 win = Tk()
@@ -1271,5 +1407,5 @@ win.bind("<Motion>", hover_event)
 win.minsize(400, 320)
 win.geometry("404x324")
 win.title("Blokus game")
-win.bind("g", game_over)
+win.bind("g", lambda e: count_corners(field))
 win.mainloop()
