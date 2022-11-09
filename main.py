@@ -1,8 +1,11 @@
 from tkinter import *
 import tkinter.font as font
 from tkinter import ttk
+from tkinter import filedialog
+import os
 import random
 import winsound
+import time
 
 moves = []
 game_state = "Options"
@@ -34,6 +37,7 @@ player_values = ['Player', 'AI level 1', 'AI level 2', 'AI level 3']
 tiles_list = ["I5", "I4", "I3", "I2", "I1", "U5", "O4", "X5", "P5", "W5",
 "T5", "T4", "V5", "V3", "Z5", "Z4", "F5", "L5", "L4", "N5", "Y5"]
 sidepanel_id = 0
+firework = 0
 I5 = [2, 7, 12, 17, 22]
 I4 = [7, 12, 17, 22]
 I3 = [7, 12, 17]
@@ -55,12 +59,47 @@ L5 = [2, 7, 12, 17, 18]
 L4 = [2, 7, 12, 13]
 N5 = [16, 17, 12, 13, 14]
 Y5 = [11, 12, 7, 13, 14]
-P = [1, 2, 3, 6, 8, 11, 12, 13, 16, 21]
-L = [1, 6, 11, 16, 21, 22, 23]
-A = [1, 2, 3, 6, 8, 11, 12, 13, 16, 18, 21, 23]
-Y = [1, 3, 5, 8, 11, 12, 13, 17, 22]
-E = [1, 2, 3, 6, 11, 12, 13, 17, 21, 22, 23]
-R = [1, 2, 3, 6, 8, 11, 12, 13, 16, 18, 21, 24]
+symbols = { "A" : [0, 1, 2, 5, 7, 10, 11, 12, 15, 17, 20, 22],
+            "B" : [0, 1, 5, 7, 10, 11, 15, 17, 20, 21],
+            "C" : [1, 2, 5, 10, 15, 21, 22],
+            "D" : [0, 1, 5, 7, 10, 12, 15, 17, 20, 21],
+            "E" : [0, 1, 2, 5, 10, 11, 12, 15, 20, 21, 22],
+            "F" : [0, 1, 2, 5, 10, 11, 12, 15, 20],
+            "G" : [1, 2, 3, 5, 10, 12, 13, 15, 18, 21, 22, 23],
+            "H" : [0, 3, 5, 8, 10, 11, 12, 13, 15, 18, 20, 23],
+            "I" : [0, 1, 2, 6, 11, 16, 20, 21, 22],
+            "J" : [0, 1, 2, 7, 12, 15, 17, 21],
+            "K" : [0, 2, 5, 7, 10, 11, 15, 16, 20, 22],
+            "L" : [0, 5, 10, 15, 20, 21, 22],
+            "M" : [0, 4, 5, 6, 8, 9, 10, 12, 14, 15, 19, 20, 24],
+            "N" : [0, 4, 5, 6, 9, 10, 12, 14, 15, 18, 19, 20, 24],
+            "O" : [1, 2, 5, 8, 10, 13, 15, 18, 21, 22],
+            "P" : [0, 1, 5, 7, 10, 11, 15, 20],
+            "Q" : [1, 2, 5, 8, 10, 13, 15, 17, 18, 21, 22, 23],
+            "R" : [0, 1, 5, 7, 10, 11, 15, 17, 20, 22],
+            "S" : [0, 1, 2, 5, 10, 11, 12, 17, 20, 21, 22],
+            "T" : [0, 1, 2, 3, 4, 7, 12, 17, 22],
+            "U" : [0, 3, 5, 8, 10, 13, 15, 18, 21, 22],
+            "V" : [0, 4, 5, 9, 10, 14, 16, 18, 22],
+            "W" : [0, 4, 5, 9, 10, 12, 14, 15, 17, 19, 21, 23],
+            "X" : [0, 2, 5, 7, 11, 15, 17, 20, 22],
+            "Y" : [0, 2, 5, 7, 11, 16, 21],
+            "Z" : [0, 1, 2, 7, 11, 15, 20, 21, 22],
+            "_" : [20, 21, 22],
+            "," : [15, 20],
+            "." : [20],
+            ":" : [5, 15],
+            ";" : [5, 15, 20],
+            "-" : [10, 11, 12],
+            "+" : [6, 10, 11, 12, 16],
+            " " : [],
+            "#" : [1, 3, 5, 6, 7, 8, 9, 11, 13, 15, 16, 17, 18, 19, 21, 23],
+            "0" : [1, 2, 5, 8, 10, 13, 15, 18, 21, 22],
+            "1" : [1, 5, 6, 11, 16, 20, 21, 22],
+            "2" : [0, 1, 2, 7, 10, 11, 12, 15, 20, 21, 22],
+            "3" : [0, 1, 2, 7, 11, 12, 17, 20, 21, 22],
+            "4" : [0, 2, 5, 7, 10, 11, 12, 17, 22]
+            }
 
 player0_tiles = {"I5" : 1, "I4" : 1, "I3" : 1, "I2" : 1, "I1" : 1,
 "U5" : 1, "O4" : 1, "X5" : 1, "P5" : 1, "W5" : 1, "T5" : 1, "T4" : 1,
@@ -170,6 +209,7 @@ def draw_field(field, canvas):
                     draw_square(column, row, color, canvas, insert_color=colors[x])
 
 def draw_square(x, y, color, canvas, width=1, insert_color=None):
+    global field_size
     a = 260/field_size * scale
     if square_style == "Old":
         coords = 2+x*a, 2+y*a, 2+(x+1)*a, 2+(y+1)*a
@@ -184,8 +224,13 @@ def draw_square(x, y, color, canvas, width=1, insert_color=None):
         canvas.create_rectangle(coords, fill = color, width=width)
     elif square_style == "3D":
         if (color != "#eeeeee" and color != "#fafafa"):
+            b = field_size
             coords = 2+x*a, 2+y*a, 2+(x+1)*a, 2+(y+1)*a
-            coords = 2+2*scale+x*a, 2+2*scale+y*a, 2+(x+1)*a-2*scale, 2+(y+1)*a-2*scale
+            canvas.create_rectangle(coords, fill = insert_color, width=width)
+            coords = 2+1*scale+2/b*x*scale+x*a, 2+1*scale+2/b*y*scale+y*a, 2-3*scale+2/b*x*scale+(x+1)*a, 2-3*scale+2/b*y*scale+(y+1)*a
+            canvas.create_rectangle(coords, fill = color, width=width)
+        else:
+            coords = 2+x*a, 2+y*a, 2+(x+1)*a, 2+(y+1)*a
             canvas.create_rectangle(coords, fill = color, width=width)
 
 def click_event(event):
@@ -215,7 +260,6 @@ def click_event(event):
             tile_list = list(globals()[f'player{id}_tiles'].items())
             tile_name = tile_list[vy*3+vx][0]
             if (active_tile != tile_name) and player_types[player_id][0:2] != "AI":
-                print(player_types[player_id])
                 active_tile = tile_name
                 winsound.PlaySound('Sounds/selected.wav', winsound.SND_FILENAME|winsound.SND_ASYNC|winsound.SND_NODEFAULT)
             elif player_types[player_id][0:2] != "AI" and (active_tile == tile_name):
@@ -690,8 +734,27 @@ def draw_tile(player_id, field, tiles, x, y, return_field = False):
 def draw_sidepanel():
     coords = 260*scale+2, 2, 394.5*scale, 315.5*scale
     canvas.create_rectangle(coords, fill = "#cccccc", outline = "#000000")
-    coords = (8+260)*scale, 2.5*scale, (8+260+120)*scale, (2.5+36)*scale
+    coords = (8+260)*scale, 2.5*scale, (8+260+120)*scale, (2.5+25)*scale
     canvas.create_rectangle(coords, fill = "#eeeeee")
+    width = 0
+    for id, char in enumerate(players[sidepanel_id]):
+        if width*2 + id >= 51:
+            break
+        global symbols
+        if char not in symbols.keys():
+            char = char.upper()
+        if char not in symbols.keys():
+            continue                        # char = "?"
+        tile = symbols[f"{char}"]
+        max_x = 0
+        for square in tile:
+            x = square % 5
+            y = square // 5
+            if x > max_x:
+                max_x = x
+            coords = (8+260+x*4+(width+1)*4+id*2)*scale, (5+y*4)*scale, (8+260+(x+1)*4+(width+1)*4+id*2)*scale, (5+(y+1)*4)*scale
+            canvas.create_rectangle(coords, fill = colors[sidepanel_id], width = 1)
+        width += max_x+1
     tile_list = list(globals()[f'player{sidepanel_id}_tiles'].items())
     for ny in range(7):
         for nx in range(3):
@@ -804,6 +867,8 @@ def update():
         draw_sidepanel()
         draw_scoreboard()
         update_canvas_font()
+        if firework:
+            update_fireworks()
     elif (game_state == "Options"):
         update_options_font()
         frame.config(width=startX*scale, height=startY*scale)
@@ -945,6 +1010,7 @@ def check_corners(id, field, x, y):
 
 def undo(event=None):
     if (len(log) >= 1):
+        global has_moves
         global player_id
         global move_count
         global moves
@@ -962,6 +1028,8 @@ def undo(event=None):
         globals()[f'player{player_id}_tiles'][f'{name}'] += 1
         move_count -= 1
         sidepanel_id = player_id
+        if not has_moves[int(player)]:
+            has_moves[int(player)] = 1
         print("Reverted the last move!")
         update()
         moves = check_for_moves(player_id, field)
@@ -1128,6 +1196,76 @@ and {winners[2]} with {highest} points!")
 def new_game():
     print("New Game")
 
+def load_game():
+    global field, log, player_id, move_count
+    path = filedialog.askopenfilename(initialdir="Saves")
+    if not path:
+        return
+    field = []
+    log = []
+    player_id = 0
+    log_flag = False
+    field_flag = False
+    with open(path, "r") as f:
+        text = f.readlines()    # String
+        print(text)
+        for line in text:       # line is Element of Array
+            if line[0:5] == "*log:":
+                log_flag = True
+                field_flag = False
+                continue
+            elif line[0:7] == "*field:":
+                log_flag = False
+                field_flag = True
+                continue
+            elif line[0:11] == "*player_id:":
+                player_id = int(line[13])
+            elif line[0] != "*" and log_flag:
+                log.append(line[0:-1])
+                continue
+            elif line[0] != "*" and field_flag:
+                field.append([])
+                for char in line[0:-1]:
+                    if char != "#":
+                        char = int(char)
+                    field[-1].append(char)
+                continue
+    move_count = len(log)
+    print(field)
+    print(log)
+
+def save_game():
+    global field, log, player_id
+    if os.path.isdir(r"Saves"):
+        print("exists")
+    else:
+        os.mkdir("Saves")
+    name = filedialog.asksaveasfilename(initialdir="Saves", filetypes=[("Text save file",".txt")])
+    if not name:
+        print("Cancelled")
+        return
+    if len(name) >= 4:
+        if name[-4:] != ".txt":
+            name = name + ".txt"
+    else:
+        name = name + ".txt"
+    with open(name, "w") as f:
+        f.write("*log:\n")
+        for move in log:
+            f.write(move)
+            f.write("\n")
+        f.write("*field:\n")
+        for line in field:
+            for char in line:
+                f.write(str(char))
+            f.write("\n")
+        f.write(f"*player_id: {str(player_id)}\n")
+        f.write(f"*players\n")
+        for player in players:
+            f.write(player+"\n")
+            f.write(player_types+"\n")
+        f.write("*end")
+
 def hint():
     global moves
     global active_tile
@@ -1188,6 +1326,10 @@ def create_menu():
     menubar.add_cascade(menu=menu_game, label='Game')
     menu_game.add_command(label='New Game', command=new_game)
     menu_game.entryconfigure('New Game', accelerator='Control+N')
+    menu_game.add_command(label='Save Game', command=save_game)
+    menu_game.entryconfigure('Save Game', accelerator='Control+S')
+    menu_game.add_command(label='Load Game', command=load_game)
+    menu_game.entryconfigure('Load Game', accelerator='Control+O')
     menu_game.add_command(label='Undo', command=undo)
     menu_game.entryconfigure('Undo', accelerator='Control+Z')
 
@@ -1297,6 +1439,10 @@ def button_apply_and_restart():
     global moves
     global sidepanel_id
     global has_moves
+    global last_added_particle
+    global particles
+    global particles_destroyed
+    global firework
     reset_player_tiles()
     change_player(0)
     field_size = int(combobox_field.get()[0:2])
@@ -1316,6 +1462,12 @@ def button_apply_and_restart():
     count_corners(field)
     moves = check_for_moves(0, field)
     AI_move()
+    """last_added_particle = time.time()-1.0    #FIREWORKS HERE
+    firework = 10
+    particles = []  # [] within particles is 1 particle.
+                    # [x, y, velX, velY, age, last_updated, id]
+    particles_destroyed = 0
+    fireworks("red", 1, 3.0, 50.0)"""
 
 def change_player_names():
     global players
@@ -1339,6 +1491,59 @@ def show_message(title, text):
     label_text = Label(top, text=text, font=("Arial", 12), bg="#eeeeee", justify=LEFT, wraplength=230)
     label_text.pack(fill=BOTH, expand=True)
     top.mainloop()
+
+def fireworks(color, pps, lifetime, gravity):
+    global firework, particles, last_added_particle, removed, particles_destroyed
+                    # [] within particles is 1 particle.
+                    # [x, y, velX, velY, age, last_updated, id]
+    now = time.time()
+    #print("########################################################")
+    #print(f"time since last p added: {1/(now-last_added_particle)}")
+    #print(f"smaller than {pps}: {1/(now-last_added_particle) >= pps}")
+    if 1/(now-last_added_particle) <= pps:
+        last_added_particle = now
+        particle_id = f"particle_{len(particles) + particles_destroyed}"
+        particles.append([0.0, 10.0, 500.0, 3.0, 0.0, now, particle_id])
+        #print(f"[{now}] Particle created!")
+    removed = 0
+    #print("Particles list:")
+    #print(f"{particles}")
+    for id, particle in enumerate(particles):
+        x, y, velX, velY, age, last_updated, particle_id = particle
+        time_diff = now - last_updated
+        particle[0] = x + velX*time_diff
+        particle[1] = y + velY*time_diff
+        particle[3] = velY + gravity*time_diff
+        if age + time_diff < lifetime:
+            particle[4] = age + time_diff
+        elif len(particles):
+            #print(f"{id}, {removed}")
+            #print(f"{particles}")
+            particles.pop(id-removed)
+            removed += 1
+            particles_destroyed += 1
+        particle[5] = now
+
+    """print("Updated!")
+    print("Particles list ater update:")
+    print(f"{particles}")"""
+    firework -= time_diff
+    #print(firework)
+    update()
+    if firework > 0:
+        print("repeating")
+        win.update()
+        time.sleep(0.005)
+        fireworks(color, pps, lifetime, gravity)
+        return
+
+def update_fireworks():
+    global particles
+    if particles == None:
+        return
+    for particle in particles:
+        x, y, *_ = particle
+        canvas.create_oval((x-2)*scale, (y-2)*scale, (x+2)*scale, (y+2)*scale, fill="red", width=0)
 
 field = generate_field(field_size, field_size)
 win = Tk()
