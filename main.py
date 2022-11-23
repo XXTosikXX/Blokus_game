@@ -6,6 +6,7 @@ import os
 import random
 import winsound
 import time
+import copy
 
 moves = []
 game_state = "Options"
@@ -59,6 +60,7 @@ L5 = [2, 7, 12, 17, 18]
 L4 = [2, 7, 12, 13]
 N5 = [16, 17, 12, 13, 14]
 Y5 = [11, 12, 7, 13, 14]
+
 symbols = { "A" : [0, 1, 2, 5, 7, 10, 11, 12, 15, 17, 20, 22],
             "B" : [0, 1, 5, 7, 10, 11, 15, 17, 20, 21],
             "C" : [1, 2, 5, 10, 15, 21, 22],
@@ -335,10 +337,14 @@ def no_overlapping(field, tiles, x, y):
 def find_and_select_next_player():
     global sidepanel_id
     global has_moves
+    global has_moves
+    count_corners(field)
+    if not check_for_moves(player_id, field):
+        has_moves[player_id] = 0
+        draw_scoreboard()
     id = player_id+1
     for vid in range(len(players)):
         next_id = (id+vid) % len(players)
-        count_corners(field)
         #print(f"Checking moves for {next_id}")
         moves = check_for_moves(next_id, field)
         if (moves):
@@ -360,10 +366,10 @@ def find_and_select_next_player():
 def calculate_move_scores(moves, field):
     move_scores = []
     for move in moves:
-        AI_field = copy_field(field)
+        AI_field = copy.deepcopy(field)
         name, x, y, rotation, mirror = move.split("_")
         AI_field = AI_place_tile(AI_field, player_id, name, int(x), int(y), int(rotation), int(mirror))
-        count_corners(AI_field)
+        count_corners(AI_field, AI=True)
         score = len(globals()[f'Player{player_id}_corners'])
         if not team_mode:
             for id in range(len(players)):
@@ -454,7 +460,7 @@ def AI_move():
         for move in moves:
             #placing already known moves
             #print(f"Checking move: {move}")
-            AI_field = copy_field(field)
+            AI_field = copy.deepcopy(field)
             name, x, y, rotation, mirror = move.split("_")
             #print(AI_field)
             AI_field = AI_place_tile(AI_field, player_id, name, int(x), int(y), int(rotation), int(mirror))
@@ -503,14 +509,6 @@ def AI_move():
         place_tile(field, name, int(x), int(y), int(rotation), int(mirror), AI = True)
         find_and_select_next_player()
         update()
-
-def copy_field(field):
-    new_field = []
-    for row, y in enumerate(field):
-        new_field.append([])
-        for column, x in enumerate(y):
-            new_field[row].append(x)
-    return new_field
 
 def AI_place_tile(AI_field, player_id, name, x, y, rotation, mirror):
     tiles = globals()[f'{name}']
@@ -562,7 +560,7 @@ def check_piece(name, id):
 
 def check_move(player_id, local_field, tiles, x, y, msg):
     if (move_count // len(players) == 0):
-        valid_first_move = check_first_move(local_field, tiles, x, y)
+        valid_first_move = check_first_move(local_field, tiles, x, y, player_id)
         if (valid_first_move == False):
             if (msg):
                 print("First tile should occupy square in a corner!")
@@ -574,7 +572,7 @@ def check_move(player_id, local_field, tiles, x, y, msg):
             return True
     return False
 
-def check_first_move(field, tiles, x, y):
+def check_first_move(field, tiles, x, y, player_id):
     skip = False
     true_counter = 0
     bottom_left = bottom_right = top_left = top_right = False
@@ -625,6 +623,8 @@ def check_first_move(field, tiles, x, y):
             return True
         if (top_left and x+vx == 0 and y+vy == 0):
             return True
+    if true_counter != player_id:
+        return True
     return False
 
 def apply_rotation(tiles, rotation):
@@ -943,7 +943,7 @@ def rotate(event=None, rotation_modifier=0):
     hover_event(event=None)
     #update()
 
-def count_corners(field, counter=None):     # Counts squares for each player
+def count_corners(field, counter=None, AI=False):     # Counts squares for each player
                                             # where he can place tiles on
                                             # (Corners to previous tiles).
                                             # Saves result to player{id}_corners
@@ -953,7 +953,7 @@ def count_corners(field, counter=None):     # Counts squares for each player
         locals()["move_count"] = counter
     for player in range(len(players)):
         globals()[f"Player{player}_corners"] = []
-        if (move_count // len(players) == 0 and move_count <= player):
+        if (move_count // len(players) == 0 and move_count <= player and not AI):
             if (player == 1):
                 if (field[0][0] != "#"):
                     globals()[f"Player1_corners"].append(f"{field_size-1}_{field_size-1}")
@@ -973,8 +973,8 @@ def count_corners(field, counter=None):     # Counts squares for each player
                 for column, x in enumerate(y):
                     if(check_corners(player, field, column, row)):
                         globals()[f"Player{player}_corners"].append(f"{column}_{row}")
-    """print(f"Player0_corners: {Player0_corners}")
-    print(f"Player1_corners: {Player1_corners}")"""
+    #print(f"Player0_corners: {Player0_corners}")
+    #print(f"Player1_corners: {Player1_corners}")
 
 def check_corners(id, field, x, y):
     edge_flag = True
@@ -1068,7 +1068,7 @@ def check_for_moves(player_id, field):  # Checks for moves for a player id.
     corners = globals()[f"Player{player_id}_corners"]
     for name in tiles_list:  # goes through every tile name in tile_list
         tiles = globals()[f"{name}"]
-        for str in corners: # tries to place that tile into all possible locations
+        for str in corners: # tries to place that tile into all possible locations (corners of a player)
             x, y = str.split("_")
             x = int(x)
             y = int(y)
@@ -1088,7 +1088,7 @@ def check_for_moves(player_id, field):  # Checks for moves for a player id.
                     if rotation % 2 == 1 and mirror == 1 and (compare_arrays(mirrored_tiles, apply_rotation(tiles, 1)) or compare_arrays(mirrored_tiles, apply_rotation(tiles, 3))):
                         #print(f"tile: {name}_{rotation}_{mirror}, {mirrored_tiles} and {rotated_tiles} are the same, no need to mirror#")
                         continue
-                    for square in mirrored_tiles:
+                    for square in mirrored_tiles: # tries to place a square of a tile in corner position x, y from corners
                         vx = (square % 5) -2
                         vy = (square // 5) -2
                         if (check_tile(player_id, field, mirrored_tiles, name, x-vx, y-vy)):
@@ -1101,9 +1101,9 @@ def check_for_moves(player_id, field):  # Checks for moves for a player id.
                             else:
                                 ly = f"{y-vy}"
                             moves.append(f"{name}_{lx}_{ly}_{rotation}_{mirror}")
-                            #print(f"Tile {name} successfully fit in {x-vx}, {y-vy} with rotation: {rotation} and mirror: {mirror}")
+                            #print(f"Tile {name} does successfully fit in {x-vx}, {y-vy} with rotation: {rotation} and mirror: {mirror}")
                         else:
-                            #print(f"Tile {name} does not fit in {x-vx}, {y-vy} with rotation: {rotation} and mirror: {mirror}")
+                            #print(f"Tile {name} does not fit in {x-vx}, {y-vy} with rotation: {rotation} and mirror: {mirror} for {player_id}")
                             pass
 
     #print(f"moves = {moves}")
@@ -1197,42 +1197,58 @@ def new_game():
     print("New Game")
 
 def load_game():
-    global field, log, player_id, move_count
+    global field, log, player_id, move_count, players, field_rotation, field_size
+    global sidepanel_id
+    if not os.path.isdir(r"Saves"):
+        os.mkdir("Saves")
     path = filedialog.askopenfilename(initialdir="Saves")
     if not path:
         return
     field = []
     log = []
+    players = []
+    player_types = []
     player_id = 0
     log_flag = False
     field_flag = False
+    players_flag = False
     with open(path, "r") as f:
         text = f.readlines()    # String
         print(text)
         for line in text:       # line is Element of Array
             if line[0:5] == "*log:":
                 log_flag = True
-                field_flag = False
-                continue
+                field_flag = players_flag = False
             elif line[0:7] == "*field:":
-                log_flag = False
+                log_flag = players_flag = False
                 field_flag = True
-                continue
+            elif line[0:9] == "*players:":
+                log_flag = field_flag = False
+                players_flag = True
             elif line[0:11] == "*player_id:":
-                player_id = int(line[13])
+                player_id = int(line[12])
+                sidepanel_id = player_id
             elif line[0] != "*" and log_flag:
                 log.append(line[0:-1])
-                continue
             elif line[0] != "*" and field_flag:
                 field.append([])
                 for char in line[0:-1]:
                     if char != "#":
                         char = int(char)
                     field[-1].append(char)
-                continue
+            elif line[0] != "*" and players_flag:
+                if len(players) == len(player_types):
+                    players.append(line[0:-1])
+                else:
+                    player_types.append(line[0:-1])
     move_count = len(log)
+    field_size = len(field)
     print(field)
     print(log)
+    reset_player_tiles()
+    for move in log:
+        player, name, *_ = move.split("_")
+        globals()[f"player{player}_tiles"][f"{name}"] = 0
 
 def save_game():
     global field, log, player_id
@@ -1260,10 +1276,10 @@ def save_game():
                 f.write(str(char))
             f.write("\n")
         f.write(f"*player_id: {str(player_id)}\n")
-        f.write(f"*players\n")
-        for player in players:
-            f.write(player+"\n")
-            f.write(player_types+"\n")
+        f.write(f"*players:\n")
+        for id, player in enumerate(players):
+            f.write(str(player)+"\n")
+            f.write(str(player_types[id])+"\n")
         f.write("*end")
 
 def hint():
