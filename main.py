@@ -71,7 +71,7 @@ symbols = { "A" : [0, 1, 2, 5, 7, 10, 11, 12, 15, 17, 20, 22],
             "H" : [0, 3, 5, 8, 10, 11, 12, 13, 15, 18, 20, 23],
             "I" : [0, 1, 2, 6, 11, 16, 20, 21, 22],
             "J" : [0, 1, 2, 7, 12, 15, 17, 21],
-            "K" : [0, 2, 5, 7, 10, 11, 15, 16, 20, 22],
+            "K" : [0, 2, 5, 7, 10, 11, 15, 17, 20, 22],
             "L" : [0, 5, 10, 15, 20, 21, 22],
             "M" : [0, 4, 5, 6, 8, 9, 10, 12, 14, 15, 19, 20, 24],
             "N" : [0, 4, 5, 6, 9, 10, 12, 14, 15, 18, 19, 20, 24],
@@ -861,7 +861,7 @@ def draw_scoreboard():
 
 def update():
     #print("updating")
-    if (game_state == "Game"):
+    if (game_state == "Game") and (canvas in win.pack_slaves()):
         canvas.delete('all')
         draw_field(field, canvas)
         draw_sidepanel()
@@ -1198,7 +1198,7 @@ def new_game():
 
 def load_game():
     global field, log, player_id, move_count, players, field_rotation, field_size
-    global sidepanel_id
+    global sidepanel_id, has_moves, player_types
     if not os.path.isdir(r"Saves"):
         os.mkdir("Saves")
     path = filedialog.askopenfilename(initialdir="Saves")
@@ -1225,9 +1225,14 @@ def load_game():
             elif line[0:9] == "*players:":
                 log_flag = field_flag = False
                 players_flag = True
+            elif line[0:11] == "*has_moves:":
+                has_moves = line[12:-1].split("_")
+                print(has_moves)
             elif line[0:11] == "*player_id:":
                 player_id = int(line[12])
                 sidepanel_id = player_id
+            elif line[0:10] == "*team_mode":
+                team_mode = int(line[12:-1])
             elif line[0] != "*" and log_flag:
                 log.append(line[0:-1])
             elif line[0] != "*" and field_flag:
@@ -1244,6 +1249,7 @@ def load_game():
     move_count = len(log)
     field_size = len(field)
     print(field)
+    print(players)
     print(log)
     reset_player_tiles()
     for move in log:
@@ -1251,7 +1257,7 @@ def load_game():
         globals()[f"player{player}_tiles"][f"{name}"] = 0
 
 def save_game():
-    global field, log, player_id
+    global field, log, player_id, team_mode, has_moves
     if os.path.isdir(r"Saves"):
         print("exists")
     else:
@@ -1280,11 +1286,24 @@ def save_game():
         for id, player in enumerate(players):
             f.write(str(player)+"\n")
             f.write(str(player_types[id])+"\n")
-        f.write("*end")
+        if team_mode:
+            team_mode = 1
+        else:
+            team_mode = 0
+        f.write(f"*team_mode: {team_mode}\n")
+        f.write(f"*has_moves: ")
+        for item, id in enumerate(has_moves):
+            f.write(str(item))
+            if id != len(players):
+                f.write("_")
+        f.write("\n*end")
 
 def hint():
     global moves
     global active_tile
+    global game_state
+    if game_state != "Game":
+        return
     remove_hint()
     active_tile = "None"
     move = random.choice(moves)
@@ -1360,8 +1379,9 @@ def create_menu():
 
 
     menu_help = Menu(menubar)
-    menu_help.add_command(label='Hint', command=hint)
     menubar.add_cascade(menu=menu_help, label='Help')
+    menu_help.add_command(label='Hint', command=hint)
+    menu_help.add_command(label='Show rules', command = show_rules)
 
 def change_game_state(event=None):
     global game_state
@@ -1496,16 +1516,66 @@ def reset_player_tiles():
         for tile in tiles_list:
             globals()[f"player{id}_tiles"][tile] = 1
 
-def show_message(title, text):
+def show_rules():
+    winsound.PlaySound('Sounds/win.wav', winsound.SND_FILENAME|winsound.SND_ASYNC|winsound.SND_NODEFAULT)
+    txt = """
+Rules:
+1. The first piece played by each player must cover a field's corner square.
+    1.1 Second player has to cover the corner opposite of first player's corner.
+2. Each new piece must touch at least one other piece of the same color, but only at the corners. Pieces of the same color cannot be in contact along an edge.
+    2.1 Once a piece has been placed in the field it cannot be moved or removed during subsequent turns.
+    2.2 There are no restrictions on how many pieces of different colors may be in contact with each other.
+3. If a player cannot place any of his/her pieces in a field, he/she skips his/her turns until the end of the game.
+4. The game ends when all players are blocked from laying down any more of their pieces. This includes any players who have placed all of their pieces in the field.
+    4.1 After that the score is calculated and a player with highest score wins.
+        4.1.1 In team mode players in each team add their scores together. Team with higher total score wins.
+
+Score:
+1. Each player then counts the number of unit squares in his/her remaining pieces. (1 square unit = -1 point)
+2. A player earns +15 points if all his/her pieces have been placed in the field plus 5 additional bonus points if the last piece placed in the field was the smallest piece (one square)
+
+Keybinds:
+[Left Mouse Button] to select and place a piece
+[Q] and [E] to rotate a piece
+[S] to mirror a piece
+[C] and [V] to rotate field
+[Ctrl+Z] to undo last move
+"""
+    show_message("Game rules", txt, size = "1200x960", rules = True)
+
+def show_message(title, text, size = "300x240", rules = False):
     global top, win
     top = Toplevel()
     top.grab_set()
     top.title(f"{title}")
-    top.geometry("300x240")
+    top.geometry(size)
     top.resizable(0, 0)
     top.attributes("-toolwindow",1)
-    label_text = Label(top, text=text, font=("Arial", 12), bg="#eeeeee", justify=LEFT, wraplength=230)
-    label_text.pack(fill=BOTH, expand=True)
+    width_height = size.split("x")
+    length = int(width_height[0])-10
+    if rules:
+        padx = 30
+        pady = 30
+        length *= 0.98
+    else:
+        padx = 10
+        pady = 10
+    label_text = Label(top, text=text, font=("Arial", 12), bg="#f0f0f0", justify=LEFT, wraplength=length, anchor="n", border=0, padx=padx, pady=pady)
+    label_text.grid(column = 0, row = 0, columnspan = 4)
+    if rules:
+        global photo_1, photo_2, photo_3, photo_4
+        photo_1 = PhotoImage(file="Photos/Rule_1_wrong.png")
+        photo_2 = PhotoImage(file="Photos/Rule_1_right.png")
+        photo_3 = PhotoImage(file="Photos/Rule_1.png")
+        photo_4 = PhotoImage(file="Photos/Rule_2.png")
+        Label(top, text= "RULE 1 WRONG", bg="#f0f0f0").grid(column = 0, row = 1, pady=20)
+        Label(top, text= "RULE 1 CORRECT", bg="#f0f0f0").grid(column = 1, row = 1, pady=20)
+        Label(top, text= "RULE 1.1 CORRECT", bg="#f0f0f0").grid(column = 2, row = 1, pady=20)
+        Label(top, text= "RULE 2 CORRRECT", bg="#f0f0f0").grid(column = 3, row = 1, pady=20)
+        Label(top, image=photo_1).grid(column = 0, row = 2)
+        Label(top, image=photo_2).grid(column = 1, row = 2)
+        Label(top, image=photo_3).grid(column = 2, row = 2)
+        Label(top, image=photo_4).grid(column = 3, row = 2)
     top.mainloop()
 
 def fireworks(color, pps, lifetime, gravity):
@@ -1628,5 +1698,4 @@ win.bind("<Motion>", hover_event)
 win.minsize(400, 320)
 win.geometry("404x324")
 win.title("Blokus game")
-win.bind("g", lambda e: count_corners(field))
 win.mainloop()
